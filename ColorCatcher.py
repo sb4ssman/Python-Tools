@@ -16,7 +16,7 @@ VERSION = 1.0 # I am pleased with it.
 
 # WANT: to get a crosshair of some sort into the zoomed view to identify the critical pixel
 
-
+# Could add: better export options
 
 
 import tkinter as tk
