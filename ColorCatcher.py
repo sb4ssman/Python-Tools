@@ -41,6 +41,7 @@ class ToolTip:
         self.tipwindow = tw = tk.Toplevel(self.widget)
         tw.wm_overrideredirect(1)
         tw.wm_geometry("+%d+%d" % (x, y))
+        tw.attributes("-topmost", True)  # Ensure tooltip is on top
         label = tk.Label(tw, text=self.text, justify=tk.LEFT,
                       background="#ffffe0", relief=tk.SOLID, borderwidth=1,
                       font=("tahoma", "8", "normal"))
@@ -101,16 +102,16 @@ class ColorCatcher:
         main_frame = ttk.Frame(self.root, padding=5)
         main_frame.pack(fill=tk.BOTH, expand=True)
 
-        # Instructions text box
+        # # Instructions text box
         instructions_text = "Instructions:\n" \
                             "1. Click 'Start' to begin catching colors.\n" \
-                            "2. Hover over the desired color and press 'T'.\n" \
+                            "2. Hover over the desired color; press 'T'.\n" \
                             "3. Press 'Escape' to stop catching colors.\n" \
-                            "4. Click 'Save' to save the caught colors.\n"
-        instructions_label = tk.Text(main_frame, height=5, wrap=tk.WORD, bg="lightgray")
-        instructions_label.insert(tk.END, instructions_text)
-        instructions_label.config(state=tk.DISABLED)
-        instructions_label.pack(fill=tk.X, padx=5, pady=5)
+                            "4. Click 'Save' to save the caught colors."
+        # instructions_label = tk.Text(main_frame, height=5, wrap=tk.WORD, bg="lightgray")
+        # instructions_label.insert(tk.END, instructions_text)
+        # instructions_label.config(state=tk.DISABLED)
+        # instructions_label.pack(fill=tk.X, padx=5, pady=5)
         
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
@@ -118,8 +119,8 @@ class ColorCatcher:
         self.start_stop_button = ttk.Button(button_frame, text="Start", command=self.toggle_capture)
         self.start_stop_button.pack(side=tk.LEFT, padx=5)
         
-        self.start_stop_button.bind("<space>", lambda event: None)  # Prevent spacebar from triggering the button, so we can use it for color catching!
-        self.root.bind("<space>", lambda event: self.catch_color())  # Bind space to catch_color
+        # self.start_stop_button.bind("<space>", lambda event: None)  # Prevent spacebar from triggering the button, so we can use it for color catching!
+        # self.root.bind("<space>", lambda event: self.catch_color())  # Bind space to catch_color
 
 
         self.save_button = ttk.Button(button_frame, text="Save", command=self.save_colors)
@@ -131,10 +132,19 @@ class ColorCatcher:
         # self.use_screenshot_checkbox.pack(side=tk.RIGHT, padx=5) # We pack this one first to make it farthest right
         # createToolTip(self.use_screenshot_checkbox, "Snap and overlay a screenshot\nto collect uncooperative samples.\nEsc or spacebar will STOP.")
 
+
+
+
+
         zoom_dropdown = ttk.Combobox(button_frame, textvariable=self.zoom_multiplier, values=list(range(1, 65)), width=2) # I could let it go higher, but 64 is plenty
         zoom_dropdown.pack(side=tk.RIGHT, padx=5)
         zoom_dropdown.current(15) # default value = 16
         ttk.Label(button_frame, text="1px =").pack(side=tk.RIGHT, padx=5)
+
+
+        self.instructions_hover = ttk.Label(button_frame, text="Hover for\ninstructions")
+        self.instructions_hover.pack(side=tk.RIGHT)
+        createToolTip(self.instructions_hover, instructions_text)
 
         self.paned_window = ttk.Panedwindow(main_frame, orient=tk.HORIZONTAL)
         self.paned_window.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -200,7 +210,7 @@ class ColorCatcher:
         if file_path:
             with open(file_path, 'w') as f:
                 f.write("\n".join(self.colors))
-            messagebox.showinfo("Save Successful", "Colors saved successfully!")
+            messagebox.showinfo("Save Successful", "Colors catched successfully!")
 
 
     # Select a caught color from list, see it in the canvas
