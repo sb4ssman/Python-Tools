@@ -10,16 +10,8 @@ Created on Fri Jun 16 07:06:23 2024
 # ColorCatcher
 # This standalone tool can be used to capture the color from underneath your mouse pointer
 
+# Screenshot: will capture a screenshot and bring the tool to the front; useful if you want to sample something that is uncooperative with your clicks
 
-# -*- coding: utf-8 -*-
-"""
-Created on Fri Jun 16 07:06:23 2024
-
-@author: Thomas
-"""
-
-# ColorCatcher
-# This standalone tool can be used to capture the color from underneath your mouse pointer
 
 import tkinter as tk
 from tkinter import filedialog, messagebox
@@ -47,9 +39,7 @@ class ColorCatcher:
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
-    def on_closing(self):
-        self.stop_capture()
-        self.root.destroy()
+
 
     def setup_gui(self):
         main_frame = ttk.Frame(self.root, padding=5)
@@ -66,11 +56,11 @@ class ColorCatcher:
 
         self.use_screenshot_var = tk.BooleanVar(value=False)
         self.use_screenshot_checkbox = ttk.Checkbutton(button_frame, text="Screenshot", variable=self.use_screenshot_var)
-        self.use_screenshot_checkbox.pack(side=tk.RIGHT, padx=5)
+        self.use_screenshot_checkbox.pack(side=tk.RIGHT, padx=5) # We pack this one first to make it farthest right
 
-        zoom_dropdown = ttk.Combobox(button_frame, textvariable=self.zoom_multiplier, values=list(range(1, 17)), width=2)
+        zoom_dropdown = ttk.Combobox(button_frame, textvariable=self.zoom_multiplier, values=list(range(1, 65)), width=2) # I could let it go higher, but 64 is plenty
         zoom_dropdown.pack(side=tk.RIGHT, padx=5)
-        zoom_dropdown.current(3)
+        zoom_dropdown.current(15) # default value = 16
         ttk.Label(button_frame, text="Zoom ratio:").pack(side=tk.RIGHT, padx=5)
 
         self.paned_window = ttk.Panedwindow(main_frame, orient=tk.HORIZONTAL)
@@ -124,25 +114,44 @@ class ColorCatcher:
         self.paned_window.sashpos(0, self.root.winfo_width() // 2)
         self.right_paned_window.sashpos(0, self.right_frame.winfo_height() // 2)
 
+    def on_closing(self):
+        self.stop_capture()
+        self.root.destroy()
+
+    def save_colors(self):
+        self.stop_capture()  # Stop capturing before saving
+        print("Saving colors...")
+        file_path = filedialog.asksaveasfilename(defaultextension=".txt", filetypes=[("Text files", "*.txt")])
+        if file_path:
+            with open(file_path, 'w') as f:
+                f.write("\n".join(self.colors))
+            messagebox.showinfo("Save Successful", "Colors saved successfully!")
+
     def toggle_capture(self):
-        print("Toggling capture mode...")
         if self.capturing:
             self.stop_capture()
         else:
-            self.stop_threads = False
             self.capturing = True
+            self.stop_threads = False
             self.start_stop_button.config(text="Stop")
-            self.create_custom_cursor()
             self.root.config(cursor="crosshair")
             self.root.bind("<Button-1>", self.capture_color)
-            self.color_canvas.delete("all")  # Remove placeholder when capturing starts
 
-            if self.use_screenshot_var.get():
-                self.fullscreen_screenshot()
+            # Start the update_zoomed_view thread
+            self.update_zoomed_thread = threading.Thread(target=self.update_zoomed_view, name="Thread-1 (update_zoomed_view)")
+            self.update_zoomed_thread.daemon = True
+            self.update_zoomed_thread.start()
 
-            self.update_zoomed_view_thread()
-            self.start_update_color_display_thread()
-            self.draw_static_border()
+            # Start the update_color_display thread
+            self.update_color_display_thread = threading.Thread(target=self.update_color_display, name="Thread-2 (update_color_display)")
+            self.update_color_display_thread.daemon = True
+            self.update_color_display_thread.start()
+
+            print("Started update_zoomed_view and update_color_display threads")
+
+
+
+
 
     def stop_capture(self, event=None):
         print("Stopping capture mode...")
@@ -155,7 +164,6 @@ class ColorCatcher:
         self.color_canvas.delete("all")
         self.color_canvas.create_image(0, 0, anchor=tk.NW, image=self.transparency_tk, tags="transparency")
 
-        # Remove the full-screen overlay
         if self.overlay:
             self.overlay.destroy()
             self.overlay = None
@@ -167,18 +175,44 @@ class ColorCatcher:
                 print("Joining update_zoomed_thread")
                 self.update_zoomed_thread.join(timeout=1)
                 print("update_zoomed_thread joined")
-        except AttributeError:
-            pass
+            else:
+                print("update_zoomed_thread not alive or does not exist")
+        except AttributeError as e:
+            print(f"update_zoomed_thread error: {e}")
 
         try:
             if self.update_color_display_thread and self.update_color_display_thread.is_alive():
                 print("Joining update_color_display_thread")
                 self.update_color_display_thread.join(timeout=1)
                 print("update_color_display_thread joined")
-        except AttributeError:
-            pass
+            else:
+                print("update_color_display_thread not alive or does not exist")
+        except AttributeError as e:
+            print(f"update_color_display_thread error: {e}")
 
         print("Active threads after joining:", threading.enumerate())
+
+        # Additional thread exit confirmation
+        for thread in threading.enumerate():
+            if thread.name.startswith("Thread-") and thread.is_alive():
+                print(f"Thread {thread.name} is still alive")
+                # Force thread to stop if it hasn't exited properly
+                thread.join(timeout=1)
+                print(f"Attempting to force join {thread.name}")
+                if thread.is_alive():
+                    print(f"Thread {thread.name} is still alive after force join attempt")
+            else:
+                print(f"Thread {thread.name} has exited")
+
+
+
+
+
+
+
+
+
+
 
     def capture_color(self, event):
         print("Capturing color...")
@@ -196,80 +230,70 @@ class ColorCatcher:
         else:
             print("Coordinates out of bounds for screenshot.")
 
-    def save_colors(self):
-        self.stop_capture()  # Stop capturing before saving
-        print("Saving colors...")
-        file_path = filedialog.asksaveasfilename(defaultextension=".txt", filetypes=[("Text files", "*.txt")])
-        if file_path:
-            with open(file_path, 'w') as f:
-                f.write("\n".join(self.colors))
-            messagebox.showinfo("Save Successful", "Colors saved successfully!")
 
-    def draw_static_border(self):
-        self.zoomed_canvas.delete("overlay")
-        zoom = self.zoom_multiplier.get()
-        canvas_width = self.zoomed_canvas.winfo_width()
-        canvas_height = self.zoomed_canvas.winfo_height()
-        pixel_size = canvas_width // zoom
 
-        center_x = canvas_width // 2
-        center_y = canvas_height // 2
-
-        border_x1 = center_x - pixel_size // 2
-        border_y1 = center_y - pixel_size // 2
-        border_x2 = center_x + pixel_size // 2
-        border_y2 = center_y + pixel_size // 2
-
-        self.zoomed_canvas.create_rectangle(
-            border_x1, border_y1,
-            border_x2, border_y2,
-            outline="red", width=2, tags="overlay"
-        )
 
     def update_zoomed_view(self):
         print("Starting update_zoomed_view thread")
-        while True:
-            if self.stop_threads:
-                print("Exiting update_zoomed_view loop due to stop_threads")
-                break
+        while not self.stop_threads:
             print(f"Running update_zoomed_view loop, stop_threads={self.stop_threads}")
-            x, y = pyautogui.position()
-            zoom = self.zoom_multiplier.get()
-            canvas_width = self.zoomed_canvas.winfo_width()
-            canvas_height = self.zoomed_canvas.winfo_height()
-            region_size = canvas_width // zoom
+            try:
+                x, y = pyautogui.position()
+                zoom = self.zoom_multiplier.get()
+                canvas_width = self.zoomed_canvas.winfo_width()
+                canvas_height = self.zoomed_canvas.winfo_height()
+                region_size = canvas_width // zoom
 
-            im = pyautogui.screenshot(region=(x - region_size // 2, y - region_size // 2, region_size, region_size))
-            zoomed_im = im.resize((canvas_width, canvas_height), Image.NEAREST)
-            self.zoomed_im_tk = ImageTk.PhotoImage(zoomed_im)
-            self.zoomed_canvas.create_image(0, 0, anchor=tk.NW, image=self.zoomed_im_tk)
-            self.zoomed_canvas.config(scrollregion=self.zoomed_canvas.bbox(tk.ALL))
-            time.sleep(0.1) # CRITICALLY IMPORTANT! Without this tiny little timer, the threads won't close properly
-        print("Exiting update_zoomed_view thread")
+                im = pyautogui.screenshot(region=(x - region_size // 2, y - region_size // 2, region_size, region_size))
+                zoomed_im = im.resize((canvas_width, canvas_height), Image.NEAREST)
+                self.zoomed_im_tk = ImageTk.PhotoImage(zoomed_im)
+                self.zoomed_canvas.create_image(0, 0, anchor=tk.NW, image=self.zoomed_im_tk)
+                self.zoomed_canvas.config(scrollregion=self.zoomed_canvas.bbox(tk.ALL))
+            except Exception as e:
+                print(f"Error in update_zoomed_view: {e}")
+            time.sleep(0.1)
+        print("Exiting update_zoomed_view thread completely")
+
+
+
+
+
+
 
     def update_zoomed_view_thread(self):
         if self.capturing:
             self.update_zoomed_thread = threading.Thread(target=self.update_zoomed_view)
             self.update_zoomed_thread.start()
 
+
+
     def update_color_display(self):
         print("Starting update_color_display thread")
-        while True:
-            if self.stop_threads:
-                print("Exiting update_color_display loop due to stop_threads")
-                break
-            x, y = pyautogui.position()
-            rgb = pyautogui.screenshot().getpixel((x, y))
-            color_hex = f'#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}'
-            self.color_canvas.delete("transparency")
-            self.color_canvas.create_rectangle(0, 0, self.color_canvas.winfo_width(), self.color_canvas.winfo_height(), fill=color_hex)
+        while not self.stop_threads:
+            print(f"Running update_color_display loop, stop_threads={self.stop_threads}")
+            try:
+                x, y = pyautogui.position()
+                rgb = pyautogui.screenshot().getpixel((x, y))
+                color_hex = f'#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}'
+                self.color_canvas.delete("transparency")
+                self.color_canvas.create_rectangle(0, 0, self.color_canvas.winfo_width(), self.color_canvas.winfo_height(), fill=color_hex)
+            except Exception as e:
+                print(f"Error in update_color_display: {e}")
             time.sleep(0.1)
-        print("Exiting update_color_display thread")
+        print("Exiting update_color_display thread completely")
+
+
+
+
+
+
 
     def start_update_color_display_thread(self):
         if self.capturing:
             self.update_color_display_thread = threading.Thread(target=self.update_color_display)
             self.update_color_display_thread.start()
+
+
 
     def on_color_canvas_resize(self, event):
         self.color_canvas.delete("transparency")
