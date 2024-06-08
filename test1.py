@@ -5,19 +5,6 @@ Created on Fri Jun 16 07:06:23 2024
 @author: Thomas
 """
 
-
-
-# ColorCatcher
-# This standalone tool can be used to capture the color from underneath your mouse pointer
-
-
-# -*- coding: utf-8 -*-
-"""
-Created on Fri Jun 16 07:06:23 2024
-
-@author: Thomas
-"""
-
 # ColorCatcher
 # This standalone tool can be used to capture the color from underneath your mouse pointer
 
@@ -244,7 +231,7 @@ class ColorCatcher:
             self.zoomed_im_tk = ImageTk.PhotoImage(zoomed_im)
             self.zoomed_canvas.create_image(0, 0, anchor=tk.NW, image=self.zoomed_im_tk)
             self.zoomed_canvas.config(scrollregion=self.zoomed_canvas.bbox(tk.ALL))
-            time.sleep(0.1) # CRITICALLY IMPORTANT! Without this tiny little timer, the threads won't close properly
+            time.sleep(0.1)
         print("Exiting update_zoomed_view thread")
 
     def update_zoomed_view_thread(self):
