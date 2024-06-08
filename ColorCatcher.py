@@ -22,6 +22,62 @@ import threading
 import time
 
 
+
+# I wanted one tooltip. 
+
+class ToolTip:
+    def __init__(self, widget, text):
+        self.widget = widget
+        self.text = text
+        self.tipwindow = None
+        self.id = None
+        self.x = self.y = 0
+
+    def showtip(self):
+        "Display text in tooltip window" # "Snap and overlay a screenshot\nto collect uncooperative samples.\nEsc or spacebar will STOP."
+        x, y, cx, cy = self.widget.bbox("insert")
+        x = x + self.widget.winfo_rootx() + 25
+        y = y + cy + self.widget.winfo_rooty() + 25
+        self.tipwindow = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(1)
+        tw.wm_geometry("+%d+%d" % (x, y))
+        label = tk.Label(tw, text=self.text, justify=tk.LEFT,
+                      background="#ffffe0", relief=tk.SOLID, borderwidth=1,
+                      font=("tahoma", "8", "normal"))
+        label.pack(ipadx=1)
+
+    def hidetip(self):
+        tw = self.tipwindow
+        self.tipwindow = None
+        if tw:
+            tw.destroy()
+
+def createToolTip(widget, text):
+    toolTip = ToolTip(widget, text)
+    def enter(event):
+        toolTip.showtip()
+    def leave(event):
+        toolTip.hidetip()
+    widget.bind('<Enter>', enter)
+    widget.bind('<Leave>', leave)
+
+
+# Example Usage:
+# screenshot_checkbox = tk.Checkbutton(root, text="Use Screenshot")
+# screenshot_checkbox.pack(side=tk.RIGHT, padx=5)
+# createToolTip(screenshot_checkbox, "Capture the screen when clicking colors")
+
+
+
+
+
+
+####################
+#
+# COLOR CATCHER
+#
+##################
+
 class ColorCatcher:
     def __init__(self, root):
         self.capturing = False
@@ -45,23 +101,40 @@ class ColorCatcher:
         main_frame = ttk.Frame(self.root, padding=5)
         main_frame.pack(fill=tk.BOTH, expand=True)
 
+        # Instructions text box
+        instructions_text = "Instructions:\n" \
+                            "1. Click 'Start' to begin catching colors.\n" \
+                            "2. Hover over the desired color and press 'T'.\n" \
+                            "3. Press 'Escape' to stop catching colors.\n" \
+                            "4. Click 'Save' to save the caught colors.\n"
+        instructions_label = tk.Text(main_frame, height=5, wrap=tk.WORD, bg="lightgray")
+        instructions_label.insert(tk.END, instructions_text)
+        instructions_label.config(state=tk.DISABLED)
+        instructions_label.pack(fill=tk.X, padx=5, pady=5)
+        
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
 
         self.start_stop_button = ttk.Button(button_frame, text="Start", command=self.toggle_capture)
         self.start_stop_button.pack(side=tk.LEFT, padx=5)
+        
+        self.start_stop_button.bind("<space>", lambda event: None)  # Prevent spacebar from triggering the button, so we can use it for color catching!
+        self.root.bind("<space>", lambda event: self.catch_color())  # Bind space to catch_color
+
 
         self.save_button = ttk.Button(button_frame, text="Save", command=self.save_colors)
         self.save_button.pack(side=tk.LEFT, padx=5)
 
-        self.use_screenshot_var = tk.BooleanVar(value=False)
-        self.use_screenshot_checkbox = ttk.Checkbutton(button_frame, text="Screenshot", variable=self.use_screenshot_var)
-        self.use_screenshot_checkbox.pack(side=tk.RIGHT, padx=5) # We pack this one first to make it farthest right
+
+        # self.use_screenshot_var = tk.BooleanVar(value=False)
+        # self.use_screenshot_checkbox = ttk.Checkbutton(button_frame, text="Screenshot", variable=self.use_screenshot_var)
+        # self.use_screenshot_checkbox.pack(side=tk.RIGHT, padx=5) # We pack this one first to make it farthest right
+        # createToolTip(self.use_screenshot_checkbox, "Snap and overlay a screenshot\nto collect uncooperative samples.\nEsc or spacebar will STOP.")
 
         zoom_dropdown = ttk.Combobox(button_frame, textvariable=self.zoom_multiplier, values=list(range(1, 65)), width=2) # I could let it go higher, but 64 is plenty
         zoom_dropdown.pack(side=tk.RIGHT, padx=5)
         zoom_dropdown.current(15) # default value = 16
-        ttk.Label(button_frame, text="Zoom ratio:").pack(side=tk.RIGHT, padx=5)
+        ttk.Label(button_frame, text="1px =").pack(side=tk.RIGHT, padx=5)
 
         self.paned_window = ttk.Panedwindow(main_frame, orient=tk.HORIZONTAL)
         self.paned_window.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -71,8 +144,10 @@ class ColorCatcher:
         self.paned_window.add(left_frame, weight=1)
 
         ttk.Label(left_frame, text="Caught Colors:").pack(anchor=tk.CENTER, padx=5, pady=5)
-        self.text_field = tk.Text(left_frame)
-        self.text_field.pack(fill=tk.BOTH, expand=True)
+
+        self.color_listbox = tk.Listbox(left_frame, height=20, width=30)
+        self.color_listbox.pack(fill=tk.BOTH, expand=True)
+        self.color_listbox.bind('<<ListboxSelect>>', self.on_color_select)
 
         self.right_frame = ttk.Frame(self.paned_window, relief=tk.SUNKEN)
         self.right_frame.pack_propagate(False)
@@ -104,8 +179,8 @@ class ColorCatcher:
 
         self.root.after(100, self.center_panes)
 
-        self.root.bind('<Escape>', self.stop_capture)
-        self.root.bind('<space>', self.stop_capture)
+        # self.root.bind('<Escape>', self.stop_capture)
+        # self.root.bind('<space>', self.stop_capture)
 
         print("GUI setup complete.")
 
@@ -127,6 +202,34 @@ class ColorCatcher:
                 f.write("\n".join(self.colors))
             messagebox.showinfo("Save Successful", "Colors saved successfully!")
 
+
+    # Select a caught color from list, see it in the canvas
+    def on_color_select(self, event):
+        try:
+            selection = event.widget.curselection()
+            if selection:
+                index = selection[0]
+                color_hex = event.widget.get(index)
+                self.color_canvas.create_rectangle(0, 0, self.color_canvas.winfo_width(), self.color_canvas.winfo_height(), fill=color_hex)
+        except Exception as e:
+            print(f"Error selecting color: {e}")
+
+
+    # could you even catch them all?
+    def catch_color(self, event=None):
+        try:
+            # Get the color from the color_canvas
+            color_hex = self.current_color
+            if color_hex:
+                self.colors.append(color_hex)
+                self.color_listbox.insert(tk.END, color_hex)
+                self.color_canvas.create_rectangle(0, 0, self.color_canvas.winfo_width(), self.color_canvas.winfo_height(), fill=color_hex)
+        except Exception as e:
+            print(f"Error catching color: {e}")
+
+
+
+
     def toggle_capture(self):
         if self.capturing:
             self.stop_capture()
@@ -134,15 +237,17 @@ class ColorCatcher:
             self.capturing = True
             self.stop_threads = False
             self.start_stop_button.config(text="Stop")
-            self.root.config(cursor="crosshair")
-            self.root.bind("<Button-1>", self.capture_color)
+            self.root.config(cursor="cross")
+            # self.root.bind("<Button-1>", self.catch_color)
+            self.root.bind("<c>", lambda event: self.catch_color())  # Bind C to catch_color
+            self.root.bind("<Escape>", self.stop_capture)
 
-            # Start the update_zoomed_view thread
+            self.root.grab_set()  # Ensure the application captures all mouse events
+
             self.update_zoomed_thread = threading.Thread(target=self.update_zoomed_view, name="Thread-1 (update_zoomed_view)")
             self.update_zoomed_thread.daemon = True
             self.update_zoomed_thread.start()
 
-            # Start the update_color_display thread
             self.update_color_display_thread = threading.Thread(target=self.update_color_display, name="Thread-2 (update_color_display)")
             self.update_color_display_thread.daemon = True
             self.update_color_display_thread.start()
@@ -153,26 +258,43 @@ class ColorCatcher:
 
 
 
+
+    # The threads tended to come unraveled, so this method gets a lot of prints and trys
     def stop_capture(self, event=None):
+        if event and event.keysym != "Escape": # Look for escape specifically
+            return
+
         print("Stopping capture mode...")
         self.stop_threads = True
-        print(f"stop_threads set to {self.stop_threads}")
         self.capturing = False
-        self.start_stop_button.config(text="Start")
+
+        # Edit the buttonm in a try wrapper in case the window is already closed; want to do this beacuse sometimes it takes a moment
+        try:
+            self.start_stop_button.config(text="STOPPING")
+        except:
+            pass
+
+
+        # self.start_stop_button.config(text="Start")
         self.root.config(cursor="")
         self.root.unbind("<Button-1>")
+        self.root.unbind("<space>")
+        self.root.unbind("<Escape>")
+        self.root.grab_release()  # Release the mouse capture
+
         self.color_canvas.delete("all")
         self.color_canvas.create_image(0, 0, anchor=tk.NW, image=self.transparency_tk, tags="transparency")
+
 
         if self.overlay:
             self.overlay.destroy()
             self.overlay = None
 
-        print("Active threads before joining:", threading.enumerate())
+        # print("Active threads before joining:", threading.enumerate())
 
         try:
             if self.update_zoomed_thread and self.update_zoomed_thread.is_alive():
-                print("Joining update_zoomed_thread")
+                # print("Joining update_zoomed_thread")
                 self.update_zoomed_thread.join(timeout=1)
                 print("update_zoomed_thread joined")
             else:
@@ -182,15 +304,17 @@ class ColorCatcher:
 
         try:
             if self.update_color_display_thread and self.update_color_display_thread.is_alive():
-                print("Joining update_color_display_thread")
+                # print("Joining update_color_display_thread")
                 self.update_color_display_thread.join(timeout=1)
                 print("update_color_display_thread joined")
             else:
                 print("update_color_display_thread not alive or does not exist")
         except AttributeError as e:
-            print(f"update_color_display_thread error: {e}")
+            print(f"update_color_display_thread error: {e}")       
 
-        print("Active threads after joining:", threading.enumerate())
+        #print("Active threads after joining:", threading.enumerate())
+
+
 
         # Additional thread exit confirmation
         for thread in threading.enumerate():
@@ -204,6 +328,8 @@ class ColorCatcher:
             else:
                 print(f"Thread {thread.name} has exited")
 
+        # And fix the button
+        self.start_stop_button.config(text="Start")
 
 
 
@@ -214,21 +340,10 @@ class ColorCatcher:
 
 
 
-    def capture_color(self, event):
-        print("Capturing color...")
-        x, y = pyautogui.position()
-        screenshot = pyautogui.screenshot()
-        if 0 <= x < screenshot.width and 0 <= y < screenshot.height:
-            rgb = screenshot.getpixel((x, y))
-            color_hex = f'#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}'
 
-            self.colors.append(color_hex)
-            self.text_field.insert(tk.END, f"{color_hex}\n")
 
-            self.color_canvas.delete("transparency")
-            self.color_canvas.create_rectangle(0, 0, self.color_canvas.winfo_width(), self.color_canvas.winfo_height(), fill=color_hex)
-        else:
-            print("Coordinates out of bounds for screenshot.")
+
+
 
 
 
@@ -236,7 +351,7 @@ class ColorCatcher:
     def update_zoomed_view(self):
         print("Starting update_zoomed_view thread")
         while not self.stop_threads:
-            print(f"Running update_zoomed_view loop, stop_threads={self.stop_threads}")
+            # print(f"Running update_zoomed_view loop, stop_threads={self.stop_threads}")
             try:
                 x, y = pyautogui.position()
                 zoom = self.zoom_multiplier.get()
@@ -270,11 +385,11 @@ class ColorCatcher:
     def update_color_display(self):
         print("Starting update_color_display thread")
         while not self.stop_threads:
-            print(f"Running update_color_display loop, stop_threads={self.stop_threads}")
             try:
                 x, y = pyautogui.position()
                 rgb = pyautogui.screenshot().getpixel((x, y))
                 color_hex = f'#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}'
+                self.current_color = color_hex
                 self.color_canvas.delete("transparency")
                 self.color_canvas.create_rectangle(0, 0, self.color_canvas.winfo_width(), self.color_canvas.winfo_height(), fill=color_hex)
             except Exception as e:
