@@ -102,7 +102,7 @@ class ColorCatcher:
         main_frame = ttk.Frame(self.root, padding=5)
         main_frame.pack(fill=tk.BOTH, expand=True)
 
-        # # Instructions text box
+        # # Instructions text 
         instructions_text = "Instructions:\n" \
                             "1. Click 'Start' to begin catching colors.\n" \
                             "2. Hover over the desired color; press 'T'.\n" \
@@ -116,35 +116,35 @@ class ColorCatcher:
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
 
-        self.start_stop_button = ttk.Button(button_frame, text="Start", command=self.toggle_capture)
-        self.start_stop_button.pack(side=tk.LEFT, padx=5)
+        button_style = ttk.Style()
+        button_style.configure("Compact.TButton", padding=(5, 2), font=("Arial", 10))
+
+
+        self.start_stop_button = ttk.Button(button_frame, text="Start", command=self.toggle_capture, style="Compact.TButton", width=6)
+        self.start_stop_button.pack(side=tk.LEFT, padx=(0, 5))
         
         # self.start_stop_button.bind("<space>", lambda event: None)  # Prevent spacebar from triggering the button, so we can use it for color catching!
         # self.root.bind("<space>", lambda event: self.catch_color())  # Bind space to catch_color
 
 
-        self.save_button = ttk.Button(button_frame, text="Save", command=self.save_colors)
+        self.save_button = ttk.Button(button_frame, text="Save", command=self.save_colors, style="Compact.TButton", width=6)
         self.save_button.pack(side=tk.LEFT, padx=5)
 
-
-        # self.use_screenshot_var = tk.BooleanVar(value=False)
-        # self.use_screenshot_checkbox = ttk.Checkbutton(button_frame, text="Screenshot", variable=self.use_screenshot_var)
-        # self.use_screenshot_checkbox.pack(side=tk.RIGHT, padx=5) # We pack this one first to make it farthest right
-        # createToolTip(self.use_screenshot_checkbox, "Snap and overlay a screenshot\nto collect uncooperative samples.\nEsc or spacebar will STOP.")
-
-
-
-
+        # I rather like how this turned out
+        self.instructions_hover = ttk.Label(button_frame, text="Hover for\ninstructions")
+        self.instructions_hover.pack(side=tk.LEFT, padx=5)
+        createToolTip(self.instructions_hover, instructions_text)
 
         zoom_dropdown = ttk.Combobox(button_frame, textvariable=self.zoom_multiplier, values=list(range(1, 65)), width=2) # I could let it go higher, but 64 is plenty
-        zoom_dropdown.pack(side=tk.RIGHT, padx=5)
+        zoom_dropdown.pack(side=tk.RIGHT, padx=0)
         zoom_dropdown.current(15) # default value = 16
-        ttk.Label(button_frame, text="1px =").pack(side=tk.RIGHT, padx=5)
+        ttk.Label(button_frame, text="1px =").pack(side=tk.RIGHT, padx=0)
 
+        self.use_screenshot_var = tk.BooleanVar(value=False)
+        self.use_screenshot_checkbox = ttk.Checkbutton(button_frame, text="Screenshot", variable=self.use_screenshot_var)
+        self.use_screenshot_checkbox.pack(side=tk.RIGHT, padx=(0, 10)) 
+        createToolTip(self.use_screenshot_checkbox, "Snap and overlay a screenshot\nto collect uncooperative samples.\nEsc or spacebar will STOP.")
 
-        self.instructions_hover = ttk.Label(button_frame, text="Hover for\ninstructions")
-        self.instructions_hover.pack(side=tk.RIGHT)
-        createToolTip(self.instructions_hover, instructions_text)
 
         self.paned_window = ttk.Panedwindow(main_frame, orient=tk.HORIZONTAL)
         self.paned_window.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -254,6 +254,9 @@ class ColorCatcher:
 
             self.root.grab_set()  # Ensure the application captures all mouse events
 
+            if self.use_screenshot_var.get(): # for hard to reach colors
+                self.fullscreen_screenshot()
+
             self.update_zoomed_thread = threading.Thread(target=self.update_zoomed_view, name="Thread-1 (update_zoomed_view)")
             self.update_zoomed_thread.daemon = True
             self.update_zoomed_thread.start()
@@ -280,7 +283,8 @@ class ColorCatcher:
 
         # Edit the buttonm in a try wrapper in case the window is already closed; want to do this beacuse sometimes it takes a moment
         try:
-            self.start_stop_button.config(text="STOPPING")
+            self.start_stop_button.config(text="WAIT")
+            self.root.update_idletasks() # Force update of the button text
         except:
             pass
 
