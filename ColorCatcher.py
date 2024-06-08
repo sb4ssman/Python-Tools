@@ -6,11 +6,17 @@ Created on Fri Jun 16 07:06:23 2024
 """
 
 
-
 # ColorCatcher
 # This standalone tool can be used to capture the color from underneath your mouse pointer
 
 # Screenshot: will capture a screenshot and bring the tool to the front; useful if you want to sample something that is uncooperative with your clicks
+
+
+VERSION = 1.0 # I am pleased with it. 
+
+# WANT: to get a crosshair of some sort into the zoomed view to identify the critical pixel
+
+
 
 
 import tkinter as tk
@@ -220,7 +226,7 @@ class ColorCatcher:
         file_path = filedialog.asksaveasfilename(defaultextension=".txt", initialfile=suggested_file_name, filetypes=[("Text files", "*.txt")])
         if file_path:
             with open(file_path, 'w') as f:
-                f.write(f"ColorCatcher\nDate: {now}\nScore: {self.score}\n\nHEX, RGB, HSV\n\n")
+                f.write(f"ColorCatcher\nDate: {now}\nScore: {self.score}\n\n")
                 for color in self.colors:
                     f.write(f"{color}\n")
             messagebox.showinfo("Save Successful", f"{self.score} color(s) caught successfully!")
