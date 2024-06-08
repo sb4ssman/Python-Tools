@@ -17,6 +17,8 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 from tkinter import ttk
 from PIL import ImageGrab, ImageTk, Image, ImageDraw
+from datetime import datetime
+import colorsys
 import pyautogui
 import threading
 import time
@@ -86,6 +88,7 @@ class ColorCatcher:
         self.zoom_multiplier = tk.IntVar(value=4)
         self.stop_threads = False
         self.overlay = None
+        self.score = 0
 
         self.root = root
         self.root.title("ColorCatcher")
@@ -105,9 +108,10 @@ class ColorCatcher:
         # # Instructions text 
         instructions_text = "Instructions:\n" \
                             "1. Click 'Start' to begin catching colors.\n" \
-                            "2. Hover over the desired color; press 'T'.\n" \
+                            "2. Hover over the desired color; press 'C'.\n" \
                             "3. Press 'Escape' to stop catching colors.\n" \
-                            "4. Click 'Save' to save the caught colors."
+                            "4. Click 'Save' to save the caught colors.\n" \
+                            "Note: clicking can disrupt catching. "
         # instructions_label = tk.Text(main_frame, height=5, wrap=tk.WORD, bg="lightgray")
         # instructions_label.insert(tk.END, instructions_text)
         # instructions_label.config(state=tk.DISABLED)
@@ -153,7 +157,12 @@ class ColorCatcher:
         left_frame.pack_propagate(False)
         self.paned_window.add(left_frame, weight=1)
 
-        ttk.Label(left_frame, text="Caught Colors:").pack(anchor=tk.CENTER, padx=5, pady=5)
+        # The Catcher Label
+        self.catcher_str = tk.StringVar()
+        self.catcher_str.set(f"Caught Colors: {self.score}")
+        self.catcher_label = ttk.Label(left_frame, textvariable=self.catcher_str)
+        self.catcher_label.pack(anchor=tk.CENTER, padx=5, pady=5)
+
 
         self.color_listbox = tk.Listbox(left_frame, height=20, width=30)
         self.color_listbox.pack(fill=tk.BOTH, expand=True)
@@ -206,11 +215,16 @@ class ColorCatcher:
     def save_colors(self):
         self.stop_capture()  # Stop capturing before saving
         print("Saving colors...")
-        file_path = filedialog.asksaveasfilename(defaultextension=".txt", filetypes=[("Text files", "*.txt")])
+        now = datetime.now().strftime("%Y-%m-%d")
+        suggested_file_name = f"{now}--{self.score}-colorscaught.txt"
+        file_path = filedialog.asksaveasfilename(defaultextension=".txt", initialfile=suggested_file_name, filetypes=[("Text files", "*.txt")])
         if file_path:
             with open(file_path, 'w') as f:
-                f.write("\n".join(self.colors))
-            messagebox.showinfo("Save Successful", "Colors catched successfully!")
+                f.write(f"ColorCatcher\nDate: {now}\nScore: {self.score}\n\nHEX, RGB, HSV\n\n")
+                for color in self.colors:
+                    f.write(f"{color}\n")
+            messagebox.showinfo("Save Successful", f"{self.score} color(s) caught successfully!")
+
 
 
     # Select a caught color from list, see it in the canvas
@@ -219,8 +233,9 @@ class ColorCatcher:
             selection = event.widget.curselection()
             if selection:
                 index = selection[0]
-                color_hex = event.widget.get(index)
-                self.color_canvas.create_rectangle(0, 0, self.color_canvas.winfo_width(), self.color_canvas.winfo_height(), fill=color_hex)
+                color_entry = event.widget.get(index)
+                hex = color_entry.split(",")[0]
+                self.color_canvas.create_rectangle(0, 0, self.color_canvas.winfo_width(), self.color_canvas.winfo_height(), fill=hex)
         except Exception as e:
             print(f"Error selecting color: {e}")
 
@@ -229,11 +244,18 @@ class ColorCatcher:
     def catch_color(self, event=None):
         try:
             # Get the color from the color_canvas
-            color_hex = self.current_color
-            if color_hex:
-                self.colors.append(color_hex)
-                self.color_listbox.insert(tk.END, color_hex)
-                self.color_canvas.create_rectangle(0, 0, self.color_canvas.winfo_width(), self.color_canvas.winfo_height(), fill=color_hex)
+            rgb = self.current_color
+            if rgb:
+                hex = f'#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}'
+                hsv = colorsys.rgb_to_hsv(rgb[0] / 255.0, rgb[1] / 255.0, rgb[2] / 255.0)
+                hsv = tuple(round(i * 255) for i in hsv)
+                color_entry = f"{hex}, RGB: {rgb}, HSV: {hsv}"
+                self.colors.append(color_entry)
+                self.color_listbox.insert(tk.END, color_entry)
+                self.color_canvas.create_rectangle(0, 0, self.color_canvas.winfo_width(), self.color_canvas.winfo_height(), fill=hex)
+                self.score += 1
+                self.catcher_str.set(f"Press C to catch! ({self.score})")
+
         except Exception as e:
             print(f"Error catching color: {e}")
 
@@ -244,6 +266,7 @@ class ColorCatcher:
         if self.capturing:
             self.stop_capture()
         else:
+            self.catcher_str.set(f"Press C to catch! ({self.score})")
             self.capturing = True
             self.stop_threads = False
             self.start_stop_button.config(text="Stop")
@@ -280,7 +303,7 @@ class ColorCatcher:
         print("Stopping capture mode...")
         self.stop_threads = True
         self.capturing = False
-
+        self.catcher_str.set(f"Caught colors: ({self.score})")
         # Edit the buttonm in a try wrapper in case the window is already closed; want to do this beacuse sometimes it takes a moment
         try:
             self.start_stop_button.config(text="WAIT")
@@ -402,10 +425,10 @@ class ColorCatcher:
             try:
                 x, y = pyautogui.position()
                 rgb = pyautogui.screenshot().getpixel((x, y))
-                color_hex = f'#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}'
-                self.current_color = color_hex
+                hex = f'#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}'
+                self.current_color = rgb
                 self.color_canvas.delete("transparency")
-                self.color_canvas.create_rectangle(0, 0, self.color_canvas.winfo_width(), self.color_canvas.winfo_height(), fill=color_hex)
+                self.color_canvas.create_rectangle(0, 0, self.color_canvas.winfo_width(), self.color_canvas.winfo_height(), fill=hex)
             except Exception as e:
                 print(f"Error in update_color_display: {e}")
             time.sleep(0.1)

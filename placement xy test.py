@@ -39,9 +39,7 @@ if __name__ == "__main__":
 
     # Example file paths (replace these with your actual file paths)
     files = [
-        "E:/Games/Tale of Two Wastelands/New folder/New Folder5/nom/fst/IMG_7196.PNG",
-        "E:/Games/Tale of Two Wastelands/New folder/New Folder5/nom/fst/IMG_7179.PNG",
-        "E:/Games/Tale of Two Wastelands/New folder/New Folder5/nom/f11/IMG_7191.JPG"
+        "<path_to_file>"
 
     ]
 
