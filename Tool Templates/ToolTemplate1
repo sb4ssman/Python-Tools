@@ -1,0 +1,104 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Jun 8 3:35:53 2024
+
+@author: Thomas
+"""
+
+
+import tkinter as tk
+from tkinter import ttk
+from pystray import Icon, MenuItem as item, Menu
+from PIL import Image, ImageDraw
+
+class ToolApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("ToolApp")
+        self.root.geometry("400x300")
+        self.create_widgets()
+        self.create_tray_icon()
+        self.load_settings()
+        
+    def create_widgets(self):
+        # Menu
+        menubar = tk.Menu(self.root)
+        filemenu = tk.Menu(menubar, tearoff=0)
+        filemenu.add_command(label="Open", command=self.open_file)
+        filemenu.add_command(label="Save", command=self.save_file)
+        filemenu.add_separator()
+        filemenu.add_command(label="Exit", command=self.root.quit)
+        menubar.add_cascade(label="File", menu=filemenu)
+        
+        optionsmenu = tk.Menu(menubar, tearoff=0)
+        optionsmenu.add_checkbutton(label="Stay on Top", command=self.toggle_stay_on_top)
+        optionsmenu.add_checkbutton(label="Minimize to Tray", command=self.toggle_min_to_tray)
+        optionsmenu.add_checkbutton(label="Dark Mode", command=self.toggle_dark_mode)
+        menubar.add_cascade(label="Options", menu=optionsmenu)
+        
+        self.root.config(menu=menubar)
+        
+        # Main content
+        self.text = tk.Text(self.root)
+        self.text.pack(expand=True, fill=tk.BOTH)
+        
+        self.button = ttk.Button(self.root, text="Click Me", command=self.button_click)
+        self.button.pack(pady=10)
+        
+    def create_tray_icon(self):
+        icon_image = self.create_icon()
+        menu = Menu(item('Show', self.show_window), item('Exit', self.exit_app))
+        self.tray_icon = Icon("ToolApp", icon_image, "ToolApp", menu)
+        self.tray_icon.run_detached()
+    
+    def create_icon(self):
+        image = Image.new('RGB', (64, 64), (255, 255, 255))
+        draw = ImageDraw.Draw(image)
+        draw.rectangle((0, 0, 63, 63), outline=(0, 0, 0))
+        return image
+    
+    def load_settings(self):
+        # Load settings from a JSON file
+        pass
+    
+    def save_settings(self):
+        # Save settings to a JSON file
+        pass
+    
+    def open_file(self):
+        # Open file logic
+        pass
+    
+    def save_file(self):
+        # Save file logic
+        pass
+    
+    def button_click(self):
+        # Button click logic
+        pass
+    
+    def toggle_stay_on_top(self):
+        # Toggle stay on top logic
+        pass
+    
+    def toggle_min_to_tray(self):
+        # Toggle minimize to tray logic
+        pass
+    
+    def toggle_dark_mode(self):
+        # Toggle dark mode logic
+        pass
+    
+    def show_window(self, icon, item):
+        self.root.deiconify()
+        self.root.lift()
+    
+    def exit_app(self, icon, item):
+        self.save_settings()
+        icon.stop()
+        self.root.quit()
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = ToolApp(root)
+    root.mainloop()
