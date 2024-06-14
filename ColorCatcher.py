@@ -206,8 +206,8 @@ class ColorCatcher:
         self.send_button = ttk.Button(input_frame, text=">", command=self.send_color_to_preview, style="Compact.TButton", width=2)
         self.send_button.pack(side=tk.LEFT)
 
-        self.current_color_label = ttk.Label(input_frame, text="(None)", relief="flat", borderwidth=0)
-        self.current_color_label.pack(side=tk.LEFT, padx=(10, 0))
+        self.current_color_label = ttk.Label(input_frame, text="(None):", relief="flat", borderwidth=0)
+        self.current_color_label.pack(side=tk.RIGHT, padx=(5, 10))
 
 
 
@@ -292,11 +292,11 @@ class ColorCatcher:
             # Validate the hex color format
             if len(color_hex) == 7 and all(c in '0123456789ABCDEFabcdef' for c in color_hex[1:]):
                 self.color_canvas.create_rectangle(0, 0, self.color_canvas.winfo_width(), self.color_canvas.winfo_height(), fill=color_hex)
-                self.current_color_label.config(text=f"{color_hex}")
+                self.current_color_label.config(text=f"{color_hex}:")
             else:
                 raise ValueError("Invalid Color")
         except Exception as e:
-            self.current_color_label.config(text=f"Invalid Color")
+            self.current_color_label.config(text=f"Invalid Color!")
 
 
     # Select a caught color from list, see it in the canvas
@@ -308,7 +308,7 @@ class ColorCatcher:
                 color_entry = event.widget.get(index)
                 hex = color_entry.split(",")[0]
                 self.color_canvas.create_rectangle(0, 0, self.color_canvas.winfo_width(), self.color_canvas.winfo_height(), fill=hex)
-                self.current_color_label.config(text=f"{hex}")
+                self.current_color_label.config(text=f"{hex}:")
         except Exception as e:
             print(f"Error selecting color: {e}")
 
@@ -536,7 +536,7 @@ class ColorCatcher:
                 self.current_color = rgb
                 self.color_canvas.delete("transparency")
                 self.color_canvas.create_rectangle(0, 0, self.color_canvas.winfo_width(), self.color_canvas.winfo_height(), fill=hex)
-                self.current_color_label.config(text=f"{hex}")
+                self.current_color_label.config(text=f"{hex}:")
             except Exception as e:
                 print(f"Error in update_color_display: {e}")
             time.sleep(0.1)
