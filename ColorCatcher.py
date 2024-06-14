@@ -247,10 +247,16 @@ class ColorCatcher:
 
         self.root.update_idletasks()
 
+        self.root.bind("<Configure>", self.on_resize)
+        
         self.root.after(100, self.center_panes)
 
         print("GUI setup complete.")
 
+
+    def on_resize(self, event):
+        if event.widget == self.root:
+            self.update_zoomed_view()
 
     def center_panes(self):
         self.root.update_idletasks()
@@ -437,17 +443,6 @@ class ColorCatcher:
 
 
 
-
-
-
-
-
-
-
-
-
-
-
     def update_zoomed_view(self):
         print("Starting update_zoomed_view thread")
         while not self.stop_threads:
@@ -456,56 +451,180 @@ class ColorCatcher:
                 zoom = self.zoom_multiplier.get()
                 canvas_width = self.zoomed_canvas.winfo_width()
                 canvas_height = self.zoomed_canvas.winfo_height()
+                
+                # Calculate the region size to capture around the critical pixel
                 region_size = canvas_width // zoom
-
-                # Adjust the region to ensure the critical pixel is centered
+                
+                # Calculate the region to ensure the critical pixel is centered
                 region_x = x - (region_size // 2)
                 region_y = y - (region_size // 2)
-
+                
+                # Capture the region around the critical pixel
                 im = pyautogui.screenshot(region=(region_x, region_y, region_size, region_size))
+                
+                # Resize the captured region to fit the canvas
                 zoomed_im = im.resize((canvas_width, canvas_height), Image.NEAREST)
                 self.zoomed_im_tk = ImageTk.PhotoImage(zoomed_im)
-
+                
                 # Clear the canvas
                 self.zoomed_canvas.delete("all")
-
+                
                 # Draw the zoomed image
                 self.zoomed_canvas.create_image(0, 0, anchor=tk.NW, image=self.zoomed_im_tk)
-
+                
                 # Calculate the size of a big-pixel in the zoomed view
                 big_pixel_size = canvas_width // region_size
-
-                # Calculate the center of the canvas
+                
+                # Calculate the exact center of the canvas
                 center_x = canvas_width // 2
                 center_y = canvas_height // 2
-
-                # Move the critical pixel one half a width of a big-pixel up and left
-                center_x -= big_pixel_size // 2
-                center_y -= big_pixel_size // 2
-
-                # Calculate the critical pixel boundaries
-                critical_pixel_start_x = center_x
-                critical_pixel_start_y = center_y
-                critical_pixel_end_x = center_x + big_pixel_size - 1
-                critical_pixel_end_y = center_y + big_pixel_size - 1
-
-                # Manually adjust the crosshairs by half a big-pixel width down and right
-                crosshair_x_left = critical_pixel_start_x + big_pixel_size // 2
-                crosshair_x_right = critical_pixel_end_x + big_pixel_size // 2
-                crosshair_y_top = critical_pixel_start_y + big_pixel_size // 2
-                crosshair_y_bottom = critical_pixel_end_y + big_pixel_size // 2
-
+                
+                # Calculate the boundaries of the critical pixel
+                critical_pixel_start_x = center_x - (big_pixel_size // 2)
+                critical_pixel_start_y = center_y - (big_pixel_size // 2)
+                critical_pixel_end_x = center_x + (big_pixel_size // 2)
+                critical_pixel_end_y = center_y + (big_pixel_size // 2)
+                
                 # Draw the red lines around the critical big-pixel
-                self.zoomed_canvas.create_line(crosshair_x_left - 1, 0, crosshair_x_left - 1, canvas_height, fill="red")
-                self.zoomed_canvas.create_line(crosshair_x_right + 1, 0, crosshair_x_right + 1, canvas_height, fill="red")
-                self.zoomed_canvas.create_line(0, crosshair_y_top - 1, canvas_width, crosshair_y_top - 1, fill="red")
-                self.zoomed_canvas.create_line(0, crosshair_y_bottom + 1, canvas_width, crosshair_y_bottom + 1, fill="red")
-
+                self.zoomed_canvas.create_line(critical_pixel_start_x - big_pixel_size, 0, critical_pixel_start_x - big_pixel_size, canvas_height, fill="red")
+                self.zoomed_canvas.create_line(critical_pixel_end_x + big_pixel_size, 0, critical_pixel_end_x + big_pixel_size, canvas_height, fill="red")
+                self.zoomed_canvas.create_line(0, critical_pixel_start_y - big_pixel_size, canvas_width, critical_pixel_start_y - big_pixel_size, fill="red")
+                self.zoomed_canvas.create_line(0, critical_pixel_end_y + big_pixel_size, canvas_width, critical_pixel_end_y + big_pixel_size, fill="red")
+                
                 self.zoomed_canvas.config(scrollregion=self.zoomed_canvas.bbox(tk.ALL))
             except Exception as e:
                 print(f"Error in update_zoomed_view: {e}")
             time.sleep(0.1)
         print("Exiting update_zoomed_view thread completely")
+
+
+
+
+
+
+
+
+    # def update_zoomed_view(self):
+    #     print("Starting update_zoomed_view thread")
+    #     while not self.stop_threads:
+    #         try:
+    #             x, y = pyautogui.position()
+    #             zoom = self.zoom_multiplier.get()
+    #             canvas_width = self.zoomed_canvas.winfo_width()
+    #             canvas_height = self.zoomed_canvas.winfo_height()
+    #             region_size = canvas_width // zoom
+
+    #             # Calculate the region to ensure the critical pixel is centered
+    #             region_x = x - (region_size // 2)
+    #             region_y = y - (region_size // 2)
+
+    #             im = pyautogui.screenshot(region=(region_x, region_y, region_size, region_size))
+    #             zoomed_im = im.resize((canvas_width, canvas_height), Image.NEAREST)
+    #             self.zoomed_im_tk = ImageTk.PhotoImage(zoomed_im)
+
+    #             # Clear the canvas
+    #             self.zoomed_canvas.delete("all")
+
+    #             # Draw the zoomed image
+    #             self.zoomed_canvas.create_image(0, 0, anchor=tk.NW, image=self.zoomed_im_tk)
+
+    #             # Calculate the size of a big-pixel in the zoomed view
+    #             big_pixel_size = canvas_width // region_size
+
+    #             # Calculate the center of the canvas
+    #             center_x = canvas_width // 2
+    #             center_y = canvas_height // 2
+
+    #             # Calculate the boundaries of the critical pixel
+    #             critical_pixel_start_x = center_x - (big_pixel_size // 2)
+    #             critical_pixel_start_y = center_y - (big_pixel_size // 2)
+    #             critical_pixel_end_x = critical_pixel_start_x + big_pixel_size
+    #             critical_pixel_end_y = critical_pixel_start_y + big_pixel_size
+
+    #             # Draw the red lines around the critical big-pixel
+    #             self.zoomed_canvas.create_line(critical_pixel_start_x, 0, critical_pixel_start_x, canvas_height, fill="red")
+    #             self.zoomed_canvas.create_line(critical_pixel_end_x, 0, critical_pixel_end_x, canvas_height, fill="red")
+    #             self.zoomed_canvas.create_line(0, critical_pixel_start_y, canvas_width, critical_pixel_start_y, fill="red")
+    #             self.zoomed_canvas.create_line(0, critical_pixel_end_y, canvas_width, critical_pixel_end_y, fill="red")
+
+    #             self.zoomed_canvas.config(scrollregion=self.zoomed_canvas.bbox(tk.ALL))
+    #         except Exception as e:
+    #             print(f"Error in update_zoomed_view: {e}")
+    #         time.sleep(0.1)
+    #     print("Exiting update_zoomed_view thread completely")
+
+
+
+
+
+
+
+
+
+
+
+
+
+    # EXCELLENT... up to level 32; 64 and 128 break the viewer. 
+
+    # def update_zoomed_view(self):
+    #     print("Starting update_zoomed_view thread")
+    #     while not self.stop_threads:
+    #         try:
+    #             x, y = pyautogui.position()
+    #             zoom = self.zoom_multiplier.get()
+    #             canvas_width = self.zoomed_canvas.winfo_width()
+    #             canvas_height = self.zoomed_canvas.winfo_height()
+    #             region_size = canvas_width // zoom
+
+    #             # Adjust the region to ensure the critical pixel is centered
+    #             region_x = x - (region_size // 2)
+    #             region_y = y - (region_size // 2)
+
+    #             im = pyautogui.screenshot(region=(region_x, region_y, region_size, region_size))
+    #             zoomed_im = im.resize((canvas_width, canvas_height), Image.NEAREST)
+    #             self.zoomed_im_tk = ImageTk.PhotoImage(zoomed_im)
+
+    #             # Clear the canvas
+    #             self.zoomed_canvas.delete("all")
+
+    #             # Draw the zoomed image
+    #             self.zoomed_canvas.create_image(0, 0, anchor=tk.NW, image=self.zoomed_im_tk)
+
+    #             # Calculate the size of a big-pixel in the zoomed view
+    #             big_pixel_size = canvas_width // region_size
+
+    #             # Calculate the center of the canvas
+    #             center_x = canvas_width // 2
+    #             center_y = canvas_height // 2
+
+    #             # Move the critical pixel one half a width of a big-pixel up and left
+    #             center_x -= big_pixel_size // 2
+    #             center_y -= big_pixel_size // 2
+
+    #             # Calculate the critical pixel boundaries
+    #             critical_pixel_start_x = center_x
+    #             critical_pixel_start_y = center_y
+    #             critical_pixel_end_x = center_x + big_pixel_size - 1
+    #             critical_pixel_end_y = center_y + big_pixel_size - 1
+
+    #             # Manually adjust the crosshairs by half a big-pixel width down and right
+    #             crosshair_x_left = critical_pixel_start_x + big_pixel_size // 2
+    #             crosshair_x_right = critical_pixel_end_x + big_pixel_size // 2
+    #             crosshair_y_top = critical_pixel_start_y + big_pixel_size // 2
+    #             crosshair_y_bottom = critical_pixel_end_y + big_pixel_size // 2
+
+    #             # Draw the red lines around the critical big-pixel
+    #             self.zoomed_canvas.create_line(crosshair_x_left - 1, 0, crosshair_x_left - 1, canvas_height, fill="red")
+    #             self.zoomed_canvas.create_line(crosshair_x_right + 1, 0, crosshair_x_right + 1, canvas_height, fill="red")
+    #             self.zoomed_canvas.create_line(0, crosshair_y_top - 1, canvas_width, crosshair_y_top - 1, fill="red")
+    #             self.zoomed_canvas.create_line(0, crosshair_y_bottom + 1, canvas_width, crosshair_y_bottom + 1, fill="red")
+
+    #             self.zoomed_canvas.config(scrollregion=self.zoomed_canvas.bbox(tk.ALL))
+    #         except Exception as e:
+    #             print(f"Error in update_zoomed_view: {e}")
+    #         time.sleep(0.1)
+    #     print("Exiting update_zoomed_view thread completely")
 
 
 
