@@ -145,11 +145,18 @@ class ColorCatcher:
         self.instructions_hover.pack(side=tk.LEFT, padx=5)
         createToolTip(self.instructions_hover, instructions_text)
 
-        zoom_dropdown = ttk.Combobox(button_frame, textvariable=self.zoom_multiplier, values=[1, 2, 3, 4, 8, 16, 32], width=2) # 64 doesn't work with current update_zoomed_view, 128 does but is just too big. Any arbitrary integer should work. alternative: range(1, 129)
+        # Multiplier
+        zoom_dropdown = ttk.Combobox(button_frame, textvariable=self.zoom_multiplier, values=[1, 2, 3, 4, 8, 16, 32], width=3) # 64 doesn't work with current update_zoomed_view, 128 does but is just too big. Any arbitrary integer should work. alternative: range(1, 129)
         zoom_dropdown.pack(side=tk.RIGHT, padx=0)
         zoom_dropdown.current(5) # default value = 16
         ttk.Label(button_frame, text="1px =").pack(side=tk.RIGHT, padx=0)
+        createToolTip(zoom_dropdown, "Select pixel multiplier.\n" \
+                                            "You can input integer values, and\n" \
+                                            "you can resize the window to view\n" \
+                                            "more of the area around your mouse." \
+                                            )
 
+        # Screenshot checkbox - pack this one after the dropdown because RIGHT-to-left when packed RIGHT
         self.use_screenshot_var = tk.BooleanVar(value=False)
         self.use_screenshot_checkbox = ttk.Checkbutton(button_frame, text="Screenshot", variable=self.use_screenshot_var)
         self.use_screenshot_checkbox.pack(side=tk.RIGHT, padx=(0, 10)) 
