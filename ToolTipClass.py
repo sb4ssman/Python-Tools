@@ -6,14 +6,13 @@ Created on Sat Jun 6 10:14:14 2024
 """
 
 
-#########################
-#                       #
-#   TOOL APP TEMPLATE   #
-#                       #
-#########################
+##############################
+#                            #
+#   TOOLTIP CLASS TEMPLATE   #
+#                            #
+##############################
 
-# This is intended to be the skeletal guts of my tools and simple apps
-
+# Stuff this class into an app and you can make tooltips at your lesiure 
 
 
 # STANDARD IMPORTS
@@ -27,7 +26,7 @@ Created on Sat Jun 6 10:14:14 2024
 
 
 
-# STANDARD CLASSES
+# ToolTip Class
 ###########################
 
 class ToolTip:
@@ -68,8 +67,12 @@ def createToolTip(widget, text):
 
 
 # Example Usage:
-# screenshot_checkbox = tk.Checkbutton(root, text="Use Screenshot")
+
+# Have a thing:
+# screenshot_checkbox = tk.Checkbutton(root, text="Take Screenshot")
 # screenshot_checkbox.pack(side=tk.RIGHT, padx=5)
-# createToolTip(screenshot_checkbox, "Capture the screen when clicking colors")
+
+# Make a tooltip:
+# createToolTip(screenshot_checkbox, "Capture the screen when clicking")
 
 

@@ -202,6 +202,7 @@ class ColorCatcher:
         self.color_entry.insert(0, "#")  # Set default text
         self.color_entry.pack(side=tk.LEFT, padx=(0, 5))
 
+        # We can make sure that pound sign stays just where it is
         def keep_hash(event):
             if not self.color_entry.get().startswith("#"):
                 self.color_entry.insert(0, "#")
@@ -212,6 +213,7 @@ class ColorCatcher:
 
         self.send_button = ttk.Button(input_frame, text=">", command=self.send_color_to_preview, style="Compact.TButton", width=2)
         self.send_button.pack(side=tk.LEFT)
+        createToolTip(self.send_button, "Send a color to the field.")
 
         self.current_color_label = ttk.Label(input_frame, text="(None):", relief="flat", borderwidth=0)
         self.current_color_label.pack(side=tk.RIGHT, padx=(5, 10))
@@ -288,7 +290,7 @@ class ColorCatcher:
                 for color in self.colors:
                     f.write(f"{color}\n")
             messagebox.showinfo("Save Successful", f"{self.score} color(s) caught successfully!")
-            # NEED PANIC- OPEN FILE AFTER SAVE!
+            # could open the file or folder after save?
 
     # For previewing a specific code
     def send_color_to_preview(self):
@@ -351,8 +353,8 @@ class ColorCatcher:
             self.stop_threads = False
             self.start_stop_button.config(text="Stop")
             self.current_color_label.config(text="")
-            self.root.config(cursor="cross")
-            # self.root.bind("<Button-1>", self.catch_color)
+            # self.root.config(cursor="cross") # can't get custom cursors to persist
+            # self.root.bind("<Button-1>", self.catch_color) # LEAVE OFF; it's here so I can say leave it off. Clicking takes focus off the app and then you can't catch
             self.root.bind("<c>", lambda event: self.catch_color())  # Bind C to catch_color
             self.root.bind("<Escape>", self.stop_capture)
             self.root.bind("<space>", self.stop_capture)
@@ -362,6 +364,7 @@ class ColorCatcher:
             if self.use_screenshot_var.get(): # for hard to reach colors
                 self.fullscreen_screenshot()
 
+            # Start threads for viewers
             self.update_zoomed_thread = threading.Thread(target=self.update_zoomed_view, name="Thread-1 (update_zoomed_view)")
             self.update_zoomed_thread.daemon = True
             self.update_zoomed_thread.start()

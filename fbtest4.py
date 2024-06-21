@@ -166,7 +166,7 @@ class FancyButtonTestApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Fancy Button Tester App")
-        self.root.geometry("600x600")
+        self.root.geometry("380x420")
 
         self.style = ttk.Style()
         self.theme_var = tk.StringVar(value="Clean")
