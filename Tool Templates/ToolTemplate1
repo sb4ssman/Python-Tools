@@ -45,18 +45,7 @@ class ToolApp:
         self.button = ttk.Button(self.root, text="Click Me", command=self.button_click)
         self.button.pack(pady=10)
         
-    def create_tray_icon(self):
-        icon_image = self.create_icon()
-        menu = Menu(item('Show', self.show_window), item('Exit', self.exit_app))
-        self.tray_icon = Icon("ToolApp", icon_image, "ToolApp", menu)
-        self.tray_icon.run_detached()
-    
-    def create_icon(self):
-        image = Image.new('RGB', (64, 64), (255, 255, 255))
-        draw = ImageDraw.Draw(image)
-        draw.rectangle((0, 0, 63, 63), outline=(0, 0, 0))
-        return image
-    
+
     def load_settings(self):
         # Load settings from a JSON file
         pass
@@ -76,22 +65,7 @@ class ToolApp:
     def button_click(self):
         # Button click logic
         pass
-    
-    def toggle_stay_on_top(self):
-        # Toggle stay on top logic
-        pass
-    
-    def toggle_min_to_tray(self):
-        # Toggle minimize to tray logic
-        pass
-    
-    def toggle_dark_mode(self):
-        # Toggle dark mode logic
-        pass
-    
-    def show_window(self, icon, item):
-        self.root.deiconify()
-        self.root.lift()
+
     
     def exit_app(self, icon, item):
         self.save_settings()

@@ -9,12 +9,14 @@ Created on Fri Jun 16 07:06:23 2024
 # ColorCatcher
 # This standalone tool can be used to capture the color from underneath your mouse pointer
 
+# NOTE: most of the layout and usability of the GUI were inspired by a tutorial I cannot find. I would love to give someone the credit they deserve. 
+#       Detials that I added include selecting captured colors to view again, sending a specific color to the viewer, crosshairs, and letting the viewers expand.
+
 # Screenshot: will capture a screenshot and bring the tool to the front; useful if you want to sample something that is uncooperative with your clicks
 
 
 VERSION = 1.0 # I am pleased with it. 
 
-# NEED PANIC: to get a crosshair of some sort into the zoomed view to identify the critical pixel
 
 # Could add: better export options
 
