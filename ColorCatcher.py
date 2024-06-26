@@ -103,6 +103,8 @@ class ColorCatcher:
         self.root.geometry("420x420")
         self.root.attributes("-topmost", True)
 
+        ttk.Style().theme_use('xpnative')
+
         self.setup_gui()
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -148,7 +150,7 @@ class ColorCatcher:
         createToolTip(self.instructions_hover, instructions_text)
 
         # Multiplier
-        zoom_dropdown = ttk.Combobox(button_frame, textvariable=self.zoom_multiplier, values=[1, 2, 3, 4, 8, 16, 32], width=3) # 64 doesn't work with current update_zoomed_view, 128 does but is just too big. Any arbitrary integer should work. alternative: range(1, 129)
+        zoom_dropdown = ttk.Combobox(button_frame, textvariable=self.zoom_multiplier, values=[1, 2, 3, 4, 8, 16, 32, 64, 128], width=3) # Any arbitrary integer should work
         zoom_dropdown.pack(side=tk.RIGHT, padx=0)
         zoom_dropdown.current(5) # default value = 16
         ttk.Label(button_frame, text="1px =").pack(side=tk.RIGHT, padx=0)
@@ -355,28 +357,31 @@ class ColorCatcher:
             self.stop_threads = False
             self.start_stop_button.config(text="Stop")
             self.current_color_label.config(text="")
-            # self.root.config(cursor="cross") # can't get custom cursors to persist
-            # self.root.bind("<Button-1>", self.catch_color) # LEAVE OFF; it's here so I can say leave it off. Clicking takes focus off the app and then you can't catch
-            self.root.bind("<c>", lambda event: self.catch_color())  # Bind C to catch_color
+            self.root.bind("<c>", lambda event: self.catch_color())
             self.root.bind("<Escape>", self.stop_capture)
             self.root.bind("<space>", self.stop_capture)
 
-            self.root.grab_set()  # Ensure the application captures all mouse events
+            self.root.grab_set()
 
-            if self.use_screenshot_var.get(): # for hard to reach colors
+            if self.use_screenshot_var.get():
                 self.fullscreen_screenshot()
 
             # Start threads for viewers
-            self.update_zoomed_thread = threading.Thread(target=self.update_zoomed_view, name="Thread-1 (update_zoomed_view)")
+            self.update_zoomed_thread = threading.Thread(target=self.run_zoomed_view_update)
             self.update_zoomed_thread.daemon = True
             self.update_zoomed_thread.start()
 
-            self.update_color_display_thread = threading.Thread(target=self.update_color_display, name="Thread-2 (update_color_display)")
+            self.update_color_display_thread = threading.Thread(target=self.update_color_display)
             self.update_color_display_thread.daemon = True
             self.update_color_display_thread.start()
 
             print("Started update_zoomed_view and update_color_display threads")
 
+    def run_zoomed_view_update(self):
+        while not self.stop_threads:
+            self.update_zoomed_view()
+            time.sleep(0.1)
+        print("Exiting update_zoomed_view thread completely")
 
 
 
@@ -384,41 +389,34 @@ class ColorCatcher:
 
     # The threads tended to come unraveled, so this method gets a lot of prints and trys
     def stop_capture(self, event=None):
-        if event and event.keysym != "Escape": # Look for escape specifically
+        if event and event.keysym != "Escape":
             return
 
         print("Stopping capture mode...")
         self.stop_threads = True
         self.capturing = False
         self.catcher_str.set(f"Caught colors: ({self.score})")
-        # Edit the buttonm in a try wrapper in case the window is already closed; want to do this beacuse sometimes it takes a moment
         try:
             self.start_stop_button.config(text="WAIT")
-            self.root.update_idletasks() # Force update of the button text
+            self.root.update_idletasks()
         except:
             pass
 
-
-        # self.start_stop_button.config(text="Start")
         self.root.config(cursor="")
         self.root.unbind("<Button-1>")
         self.root.unbind("<space>")
         self.root.unbind("<Escape>")
-        self.root.grab_release()  # Release the mouse capture
+        self.root.grab_release()
 
         self.color_canvas.delete("all")
         self.color_canvas.create_image(0, 0, anchor=tk.NW, image=self.transparency_tk, tags="transparency")
-
 
         if self.overlay:
             self.overlay.destroy()
             self.overlay = None
 
-        # print("Active threads before joining:", threading.enumerate())
-
         try:
-            if self.update_zoomed_thread and self.update_zoomed_thread.is_alive():
-                # print("Joining update_zoomed_thread")
+            if hasattr(self, 'update_zoomed_thread') and self.update_zoomed_thread.is_alive():
                 self.update_zoomed_thread.join(timeout=1)
                 print("update_zoomed_thread joined")
             else:
@@ -427,24 +425,17 @@ class ColorCatcher:
             print(f"update_zoomed_thread error: {e}")
 
         try:
-            if self.update_color_display_thread and self.update_color_display_thread.is_alive():
-                # print("Joining update_color_display_thread")
+            if hasattr(self, 'update_color_display_thread') and self.update_color_display_thread.is_alive():
                 self.update_color_display_thread.join(timeout=1)
                 print("update_color_display_thread joined")
             else:
                 print("update_color_display_thread not alive or does not exist")
         except AttributeError as e:
-            print(f"update_color_display_thread error: {e}")       
+            print(f"update_color_display_thread error: {e}")
 
-        #print("Active threads after joining:", threading.enumerate())
-
-
-
-        # Additional thread exit confirmation
         for thread in threading.enumerate():
             if thread.name.startswith("Thread-") and thread.is_alive():
                 print(f"Thread {thread.name} is still alive")
-                # Force thread to stop if it hasn't exited properly
                 thread.join(timeout=1)
                 print(f"Attempting to force join {thread.name}")
                 if thread.is_alive():
@@ -452,9 +443,7 @@ class ColorCatcher:
             else:
                 print(f"Thread {thread.name} has exited")
 
-        # And fix the button
         self.start_stop_button.config(text="Start")
-
 
 
 
@@ -467,67 +456,61 @@ class ColorCatcher:
 
      
     # Update zoomed view            # EXCELLENT... up to level 32; 64 and 128 break the viewer.
-    def update_zoomed_view(self):
-        print("Starting update_zoomed_view thread")
-        while not self.stop_threads:
-            try:
-                x, y = pyautogui.position()
-                zoom = self.zoom_multiplier.get()
-                canvas_width = self.zoomed_canvas.winfo_width()
-                canvas_height = self.zoomed_canvas.winfo_height()
-                region_size = canvas_width // zoom
+    def update_zoomed_view(self, event=None):
+        if not self.capturing:
+            return
 
-                # Adjust the region to ensure the critical pixel is centered
-                region_x = x - (region_size // 2)
-                region_y = y - (region_size // 2)
+        try:
+            x, y = pyautogui.position()
+            zoom = max(1, int(self.zoom_multiplier.get()))
+            canvas_width = self.zoomed_canvas.winfo_width()
+            canvas_height = self.zoomed_canvas.winfo_height()
 
-                im = pyautogui.screenshot(region=(region_x, region_y, region_size, region_size))
-                zoomed_im = im.resize((canvas_width, canvas_height), Image.NEAREST)
-                self.zoomed_im_tk = ImageTk.PhotoImage(zoomed_im)
+            # Ensure odd number of pixels in both directions
+            region_width = (canvas_width // zoom) | 1
+            region_height = (canvas_height // zoom) | 1
 
-                # Clear the canvas
-                self.zoomed_canvas.delete("all")
+            # Adjust the region to ensure the critical pixel is centered
+            region_x = x - region_width // 2
+            region_y = y - region_height // 2
 
-                # Draw the zoomed image
-                self.zoomed_canvas.create_image(0, 0, anchor=tk.NW, image=self.zoomed_im_tk)
+            im = pyautogui.screenshot(region=(region_x, region_y, region_width, region_height))
+            
+            # Resize maintaining pixel aspect ratio
+            zoomed_width = region_width * zoom
+            zoomed_height = region_height * zoom
+            zoomed_im = im.resize((zoomed_width, zoomed_height), Image.NEAREST)
+            self.zoomed_im_tk = ImageTk.PhotoImage(zoomed_im)
 
-                # Calculate the size of a big-pixel in the zoomed view
-                big_pixel_size = canvas_width // region_size
+            # Clear the canvas
+            self.zoomed_canvas.delete("all")
 
-                # Calculate the center of the canvas
-                center_x = canvas_width // 2
-                center_y = canvas_height // 2
+            # Calculate offset to center the image
+            offset_x = (canvas_width - zoomed_width) // 2
+            offset_y = (canvas_height - zoomed_height) // 2
 
-                # Move the critical pixel one half a width of a big-pixel up and left
-                center_x -= big_pixel_size // 2
-                center_y -= big_pixel_size // 2
+            # Draw the zoomed image
+            self.zoomed_canvas.create_image(offset_x, offset_y, anchor=tk.NW, image=self.zoomed_im_tk)
 
-                # Calculate the critical pixel boundaries
-                critical_pixel_start_x = center_x
-                critical_pixel_start_y = center_y
-                critical_pixel_end_x = center_x + big_pixel_size - 1
-                critical_pixel_end_y = center_y + big_pixel_size - 1
+            # Calculate the center of the zoomed image
+            center_x = offset_x + zoomed_width // 2
+            center_y = offset_y + zoomed_height // 2
 
-                # Manually adjust the crosshairs by half a big-pixel width down and right
-                crosshair_x_left = critical_pixel_start_x + big_pixel_size // 2
-                crosshair_x_right = critical_pixel_end_x + big_pixel_size // 2
-                crosshair_y_top = critical_pixel_start_y + big_pixel_size // 2
-                crosshair_y_bottom = critical_pixel_end_y + big_pixel_size // 2
+            # Calculate the coordinates for the crosshair
+            left = center_x - zoom // 2 - 1
+            right = center_x + (zoom + 1) // 2
+            top = center_y - zoom // 2 - 1
+            bottom = center_y + (zoom + 1) // 2
 
-                # Draw the red lines around the critical big-pixel
-                self.zoomed_canvas.create_line(crosshair_x_left - 1, 0, crosshair_x_left - 1, canvas_height, fill="red")
-                self.zoomed_canvas.create_line(crosshair_x_right + 1, 0, crosshair_x_right + 1, canvas_height, fill="red")
-                self.zoomed_canvas.create_line(0, crosshair_y_top - 1, canvas_width, crosshair_y_top - 1, fill="red")
-                self.zoomed_canvas.create_line(0, crosshair_y_bottom + 1, canvas_width, crosshair_y_bottom + 1, fill="red")
+            # Draw the crosshair
+            self.zoomed_canvas.create_line(left, offset_y, left, offset_y + zoomed_height, fill="red")
+            self.zoomed_canvas.create_line(right, offset_y, right, offset_y + zoomed_height, fill="red")
+            self.zoomed_canvas.create_line(offset_x, top, offset_x + zoomed_width, top, fill="red")
+            self.zoomed_canvas.create_line(offset_x, bottom, offset_x + zoomed_width, bottom, fill="red")
 
-                self.zoomed_canvas.config(scrollregion=self.zoomed_canvas.bbox(tk.ALL))
-            except Exception as e:
-                print(f"Error in update_zoomed_view: {e}")
-            time.sleep(0.1)
-        print("Exiting update_zoomed_view thread completely")
-
-
-
+            self.zoomed_canvas.config(scrollregion=self.zoomed_canvas.bbox(tk.ALL))
+        except Exception as e:
+            print(f"Error in update_zoomed_view: {e}")
 
 
 
