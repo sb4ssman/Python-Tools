@@ -1,5 +1,26 @@
-# HIDEOUS but it's getting closer
+# Closest working one yet
 
+# ISSUES:
+
+    # CLEAR: (some of these will fix retro too)
+        # The radiobutton background does not respond correctly to hover and click events.
+        # The nested frame backgrounds do not respond correctly to hover and click events.
+        # Checkbutton backgrounds don't respond to hover and click
+
+    # RETRO:
+        # combobox background color
+        # relief shadow too dar - not equivalent to default!
+        # Inner border doesn't match surface
+        # 
+    
+    # Extra examples don't change states?
+        # better examples of ways to call the fancybutton class?
+    
+    # Dark modes: 
+        # UGLY
+        # need to match their light mode counterparts better
+        # should affect whole app - fancybuttons stylings should stay isolated but match the whole app. 
+        # Toggle button is supposed to be the baseline for judgment of button appearance and behavior. 
 
 
 import tkinter as tk
@@ -7,9 +28,7 @@ from tkinter import ttk
 import subprocess
 import re
 
-
-
-
+# Color schemes 
 LIGHT_COLORS = {
     'clean': {
         'label_bg': "#e1e1e1",
@@ -18,16 +37,20 @@ LIGHT_COLORS = {
         'border_color': "#adadad",
         'hover_border': "#0078d7",
         'click_border': "#005499",
-        'text_color': "#000000"
+        'text_color': "#000000",
+        'labelframe_bg': "#f0f0f0",
+        'labelframe_fg': "#333333"
     },
-        'retro': {
+    'retro': {
         'label_bg': "#f0f0f0",
         'hover_bg': "#f0f0f0",
         'click_bg': "#f0f0f0",
         'border_color': "#c0c0c0",
         'hover_border': "#a0a0a0",
         'click_border': "#a0a0a0",
-        'text_color': "#000000"
+        'text_color': "#000000",
+        'labelframe_bg': "#e0e0e0",
+        'labelframe_fg': "#000000"
     }
 }
 
@@ -39,7 +62,9 @@ DARK_COLORS = {
         'border_color': "#555555",
         'hover_border': "#777777",
         'click_border': "#999999",
-        'text_color': "#ffffff"
+        'text_color': "#ffffff",
+        'labelframe_bg': "#383838",
+        'labelframe_fg': "#ffffff"
     },
     'retro': {
         'label_bg': "#404040",
@@ -48,12 +73,22 @@ DARK_COLORS = {
         'border_color': "#808080",
         'hover_border': "#808080",
         'click_border': "#808080",
-        'text_color': "#ffffff"
+        'text_color': "#ffffff",
+        'labelframe_bg': "#505050",
+        'labelframe_fg': "#ffffff"
     }
 }
 
 
 
+
+
+
+#########################
+#                       #
+#   FANCYBUTTON CLASS   #
+#                       #
+#########################
 
 class FancyButton:
     def __init__(self, parent, create_surface, theme_var, dark_mode_var, command):
@@ -91,6 +126,15 @@ class FancyButton:
             return widget
         return wrapper()
 
+    def create_surface(self, surface):
+        widgets = self.create_surface(surface)
+        for widget in widgets:
+            if isinstance(widget, tk.Widget):  # Only apply font directly to tk widgets
+                font_size = self.get_font_size(widget)
+                if hasattr(widget, 'configure'):
+                    widget.configure(font=("TkDefaultFont", font_size))
+        return widgets
+
     def bind_events(self):
         self.outer_frame.bind("<Enter>", self.on_enter)
         self.outer_frame.bind("<Leave>", self.on_leave)
@@ -102,56 +146,40 @@ class FancyButton:
         self.surface.bind("<ButtonRelease-1>", self.on_release)
         self.bind_children(self.surface)
 
-
     def bind_children(self, widget):
         for child in widget.winfo_children():
-            # All widgets get enter and leave events
-            child.bind("<Enter>", self.on_enter_child)
-            child.bind("<Leave>", self.on_leave_child)
+            child.bind("<Enter>", lambda e, w=child: self.on_enter_child(e, w))
+            child.bind("<Leave>", lambda e, w=child: self.on_leave_child(e, w))
             
-            # Most widgets trigger the FancyButton's click and release events
-            if not isinstance(child, (ttk.Entry, ttk.Spinbox, ttk.Combobox, ttk.Scale, ttk.Checkbutton)): # OMIT these from triggering the fancybutton-click
-                
-                child.bind("<Button-1>", self.on_click_child)
-                child.bind("<ButtonRelease-1>", self.on_release_child)
+            if not isinstance(child, (ttk.Scrollbar, ttk.Entry, ttk.Spinbox, ttk.Combobox, ttk.Scale, ttk.Checkbutton)):
+                child.bind("<Button-1>", lambda e, w=child: self.on_click_child(e, w))
+                child.bind("<ButtonRelease-1>", lambda e, w=child: self.on_release_child(e, w))
             
-            # Special bindings
-            elif isinstance(child, (ttk.Radiobutton)): # INCLUDE in triggering fancybutton-click | more options: ttk.Checkbutton, Entry, Spinbox, Combobox, and Scale
-                child.bind("<Button-1>", self.on_interactive_widget_click)
-                child.bind("<ButtonRelease-1>", self.on_interactive_widget_release)
+            if isinstance(child, (ttk.Radiobutton)):
+                child.bind("<Button-1>", lambda e, w=child: self.on_interactive_widget_click(e, w), add="+")
+                child.bind("<ButtonRelease-1>", lambda e, w=child: self.on_interactive_widget_release(e, w), add="+")
             
-            # Recursively bind children of this widget (handles nested frames)
+            if isinstance(child, ttk.Button):
+                child.bind("<Button-1>", lambda e, w=child: self.on_inner_button_click(e, w))
+                child.bind("<ButtonRelease-1>", lambda e, w=child: self.on_inner_button_release(e, w))
+            
             if hasattr(child, 'winfo_children'):
                 self.bind_children(child)
 
-
-
-    def on_interactive_widget_click(self, event):
-        self.update_style("Click")
-        event.widget.event_generate("<<ThemeChanged>>")
-
-    def on_interactive_widget_release(self, event):
-        if self.is_mouse_within_bounds(event.x_root, event.y_root):
-            self.collect_widget_info()
+    def update_interactive_widget_state(self, event, widget):
+        if isinstance(widget, ttk.Checkbutton):
+            widget.toggle()
+        elif isinstance(widget, ttk.Radiobutton):
+            widget.invoke()
         self.update_style("Hover" if self.is_hovered else "")
-        event.widget.event_generate("<<ThemeChanged>>")
 
     def on_enter(self, event):
-        self.update_style("Hover")
         self.is_hovered = True
+        self.update_style("Hover")
 
     def on_leave(self, event):
         self.is_hovered = False
         self.update_style("")
-
-    def on_enter_child(self, event):
-        self.is_hovered = True
-        self.update_style("Hover")
-
-    def on_leave_child(self, event):
-        if not self.is_mouse_within_bounds(event.x_root, event.y_root):
-            self.is_hovered = False
-            self.update_style("")
 
     def on_click(self, event):
         self.update_style("Click")
@@ -160,19 +188,53 @@ class FancyButton:
     def on_release(self, event):
         if self.is_mouse_within_bounds(event.x_root, event.y_root):
             self.command()
-            self.collect_widget_info()
         self.update_style("Hover" if self.is_hovered else "")
 
-    def on_click_child(self, event):
-        self.update_style("Click")
-        self.collect_widget_info() 
+    def on_enter_child(self, event, widget):
+        if not self.is_hovered:
+            self.is_hovered = True
+            self.update_style("Hover")
 
-    def on_release_child(self, event):
+    def on_leave_child(self, event, widget):
+        if not self.is_mouse_within_bounds(event.x_root, event.y_root):
+            self.is_hovered = False
+            self.update_style("")
+
+    def on_click_child(self, event, widget):
+        self.update_style("Click")
+        self.collect_widget_info()
+
+    def on_release_child(self, event, widget):
         if self.is_mouse_within_bounds(event.x_root, event.y_root):
-            if isinstance(event.widget, tk.Canvas):
-                self.on_canvas_click(event, event.widget)
+            if isinstance(widget, tk.Canvas):
+                self.on_canvas_click(event, widget)
             self.command()
         self.update_style("Hover" if self.is_hovered else "")
+
+    def on_inner_button_click(self, event, button):
+        self.update_style("Click")
+        self.collect_widget_info()
+        if hasattr(button, 'invoke'):
+            button.invoke()
+
+    def on_inner_button_release(self, event, button):
+        if self.is_mouse_within_bounds(event.x_root, event.y_root):
+            self.command()
+        self.update_style("Hover" if self.is_hovered else "")
+
+    def on_interactive_widget_click(self, event, widget):
+        self.update_style("Click")
+        event.widget.event_generate("<<ThemeChanged>>")
+
+    def on_interactive_widget_release(self, event, widget):
+        if self.is_mouse_within_bounds(event.x_root, event.y_root):
+            self.collect_widget_info()
+        self.update_style("Hover" if self.is_hovered else "")
+        event.widget.event_generate("<<ThemeChanged>>")
+    
+    def on_canvas_click(self, event, canvas):
+        x, y = event.x, event.y
+        self.widget_info[canvas.winfo_name()] = f"Clicked at ({x}, {y})"
 
     def update_style(self, state):
         theme = self.theme_var.get().lower()
@@ -184,17 +246,19 @@ class FancyButton:
 
         if theme == "clean":
             if state == "Hover":
-                self.outer_frame.config(bg=colors['hover_border'], bd=0)
+                self.outer_frame.config(bg=colors['hover_border'])
                 self.inner_frame.config(bg=colors['hover_bg'])
+                bg_color = colors['hover_bg']
             elif state == "Click":
-                self.outer_frame.config(bg=colors['click_border'], bd=0)
+                self.outer_frame.config(bg=colors['click_border'])
                 self.inner_frame.config(bg=colors['click_bg'])
+                bg_color = colors['click_bg']
             else:
-                self.outer_frame.config(bg=colors['border_color'], bd=0)
+                self.outer_frame.config(bg=colors['border_color'])
                 self.inner_frame.config(bg=colors['label_bg'])
         elif theme == "retro":
-            self.outer_frame.config(bg=colors['border_color'], bd=2, relief="raised")
-            self.inner_frame.config(bg=colors['label_bg'], bd=0)
+            self.outer_frame.config(bg=colors['border_color'], relief="raised", bd=2)
+            self.inner_frame.config(bg=colors['label_bg'])
             if state == "Click":
                 self.outer_frame.config(relief="sunken")
             else:
@@ -210,76 +274,114 @@ class FancyButton:
             elif isinstance(child, tk.Widget):
                 self.style_tk_widget(child, bg_color, fg_color, state)
 
-            if isinstance(child, ttk.Frame):
-                child.configure(style='')
-                self.style.configure('TFrame', background=bg_color)
+            # if isinstance(child, (ttk.Frame, tk.Frame)):
+            #     child.configure(style='')
+            #     if isinstance(child, ttk.Frame):
+            #         self.style.configure('TFrame', background=bg_color)
+            #     else:
+            #         child.configure(bg=bg_color)
 
             if hasattr(child, 'winfo_children'):
                 self.style_descendants(child, bg_color, fg_color, state)
 
     def style_tk_widget(self, widget, bg_color, fg_color, state):
         widget_class = widget.winfo_class()
+        font_size = self.get_font_size(widget)
         if widget_class in ['Label', 'Button', 'Radiobutton', 'Checkbutton']:
-            font_size = self.get_font_size(widget)
             widget.configure(bg=bg_color, fg=fg_color, font=("TkDefaultFont", font_size))
         elif widget_class == 'Entry':
-            widget.configure(bg=bg_color, fg=fg_color, insertbackground=fg_color)
+            widget.configure(bg=bg_color, fg=fg_color, insertbackground=fg_color, font=("TkDefaultFont", font_size))
         elif widget_class in ['Frame', 'Canvas']:
             widget.configure(bg=bg_color)
         elif widget_class == 'Listbox':
             listbox_bg = "#ffffff" if self.theme_var.get().lower() in ["clean", "retro"] and not self.dark_mode_var.get() else bg_color
-            font_size = self.get_font_size(widget)
             widget.configure(bg=listbox_bg, fg=fg_color, font=("TkDefaultFont", font_size))
 
     def style_ttk_widget(self, widget, bg_color, fg_color, state):
         widget_class = widget.winfo_class()
-        font_size = self.get_font_size(widget)
         theme = self.theme_var.get().lower()
         mode = "dark" if self.dark_mode_var.get() else "light"
-        
-        if widget_class == 'TLabel':
-            if theme == "clean":
-                if state == "Hover":
-                    bg_color = LIGHT_COLORS['clean']['hover_bg'] if mode == "light" else DARK_COLORS['clean']['hover_bg']
-                elif state == "Click":
-                    bg_color = LIGHT_COLORS['clean']['click_bg'] if mode == "light" else DARK_COLORS['clean']['click_bg']
-            
-            widget.configure(style='', background=bg_color, foreground=fg_color, font=("TkDefaultFont", font_size))
-        elif widget_class in ['TEntry', 'TSpinbox', 'TCombobox']:
-            style_name = f'Custom.{widget_class}'
-            if theme == "retro" and mode == "light":
-                self.style.configure(style_name, fieldbackground='#ffffff', foreground=fg_color, font=("TkDefaultFont", font_size))
-                self.style.map(style_name, fieldbackground=[('readonly', '#ffffff')])
-            else:
-                self.style.configure(style_name, fieldbackground=bg_color, foreground=fg_color, font=("TkDefaultFont", font_size))
-                self.style.map(style_name, fieldbackground=[('readonly', bg_color)])
-            widget.configure(style=style_name)
-        elif widget_class == 'TScale':
-            self.style.configure(widget_class, troughcolor=bg_color)
-        elif widget_class == 'TProgressbar':
-            if theme == "retro":
-                self.style.configure(widget_class, background='blue', troughcolor='white' if mode == "light" else 'gray')
-            else:
-                self.style.configure(widget_class, background=bg_color, troughcolor=bg_color)
-        elif widget_class in ['TFrame', 'TLabelframe']:
-            widget.configure(style='')
-            self.style.configure(widget_class, background=bg_color)
-        elif widget_class in ['TRadiobutton', 'TCheckbutton']:
-            style_name = f'Custom.{widget_class}'
-            if theme == "clean":
-                if state == "Hover":
-                    bg_color = LIGHT_COLORS['clean']['hover_bg'] if mode == "light" else DARK_COLORS['clean']['hover_bg']
-                elif state == "Click":
-                    bg_color = LIGHT_COLORS['clean']['click_bg'] if mode == "light" else DARK_COLORS['clean']['click_bg']
-            self.style.configure(style_name, background=bg_color, foreground=fg_color)
-            widget.configure(style=style_name)
+        colors = DARK_COLORS[theme] if mode == "dark" else LIGHT_COLORS[theme]
+        font_size = self.get_font_size(widget)
 
+        if theme == "clean":
+            if state == "Hover":
+                bg_color = colors['hover_bg']
+            elif state == "Click":
+                bg_color = colors['click_bg']
+
+        try:
+            if widget_class in ['TLabel', 'TCheckbutton', 'TRadiobutton', 'TFrame', 'TLabelframe']:
+                widget.configure(background=bg_color)
+                if widget_class in ['TLabel', 'TCheckbutton', 'TRadiobutton']:
+                    widget.configure(foreground=fg_color)
+            elif widget_class in ['TEntry', 'TSpinbox', 'TCombobox']:
+                widget.configure(fieldbackground=bg_color, foreground=fg_color)
+            elif widget_class == 'TScale':
+                widget.configure(troughcolor=bg_color)
+            elif widget_class == 'TProgressbar':
+                if theme == "retro":
+                    widget.configure(background='blue', troughcolor='white' if mode == "light" else 'gray')
+                else:
+                    widget.configure(background=bg_color, troughcolor=bg_color)
+
+            # Apply font size directly to widgets that support it
+            if widget_class in ['TLabel', 'TCheckbutton', 'TRadiobutton', 'TEntry', 'TSpinbox', 'TCombobox']:
+                widget.configure(font=("TkDefaultFont", font_size))
+
+        except tk.TclError:
+            pass  # Ignore if the widget doesn't support these options
+
+    # def style_ttk_widget(self, widget, bg_color, fg_color, state):
+    #     widget_class = widget.winfo_class()
+    #     theme = self.theme_var.get().lower()
+    #     mode = "dark" if self.dark_mode_var.get() else "light"
+    #     colors = DARK_COLORS[theme] if mode == "dark" else LIGHT_COLORS[theme]
+    #     font_size = self.get_font_size(widget)
+
+    #     if theme == "clean":
+    #         if state == "Hover":
+    #             bg_color = colors['hover_bg']
+    #         elif state == "Click":
+    #             bg_color = colors['click_bg']
+
+    #     try:
+    #         if widget_class in ['TLabel', 'TCheckbutton', 'TRadiobutton']:
+    #             widget.configure(style=f'{widget_class}.{id(self)}')
+    #             self.style.configure(f'{widget_class}.{id(self)}', background=bg_color, foreground=fg_color)
+    #         elif widget_class in ['TEntry', 'TSpinbox', 'TCombobox']:
+    #             widget.configure(style=f'{widget_class}.{id(self)}')
+    #             self.style.configure(f'{widget_class}.{id(self)}', fieldbackground=bg_color, foreground=fg_color)
+    #         elif widget_class == 'TScale':
+    #             widget.configure(style=f'{widget_class}.{id(self)}')
+    #             self.style.configure(f'{widget_class}.{id(self)}', troughcolor=bg_color)
+    #         elif widget_class == 'TProgressbar':
+    #             widget.configure(style=f'{widget_class}.{id(self)}')
+    #             if theme == "retro":
+    #                 self.style.configure(f'{widget_class}.{id(self)}', 
+    #                                     background='blue', 
+    #                                     troughcolor='white' if mode == "light" else 'gray')
+    #             else:
+    #                 self.style.configure(f'{widget_class}.{id(self)}', 
+    #                                     background=bg_color, 
+    #                                     troughcolor=bg_color)
+    #         elif widget_class in ['TFrame', 'TLabelframe']:
+    #             widget.configure(style=f'{widget_class}.{id(self)}')
+    #             self.style.configure(f'{widget_class}.{id(self)}', background=bg_color)
+    #     except tk.TclError:
+    #         pass  # Ignore if the widget doesn't support these options
+
+    #     # Apply font size directly to widgets that support it
+    #     if widget_class in ['TLabel', 'TCheckbutton', 'TRadiobutton', 'TEntry', 'TSpinbox', 'TCombobox']:
+    #         try:
+    #             widget.configure(font=("TkDefaultFont", font_size))
+    #         except tk.TclError:
+    #             pass  # Ignore if widget doesn't support direct font configuration
 
     def get_font_size(self, widget):
         name = widget.winfo_name()
         font_match = re.search(r'font(\d+)', name)
         return int(font_match.group(1)) if font_match else 10  # default font size
-
 
     def is_mouse_within_bounds(self, x_root, y_root):
         left = self.outer_frame.winfo_rootx()
@@ -287,7 +389,6 @@ class FancyButton:
         top = self.outer_frame.winfo_rooty()
         bottom = top + self.outer_frame.winfo_height()
         return left <= x_root <= right and top <= y_root <= bottom
-
 
     def collect_widget_info(self):
         self.widget_info = {}
@@ -310,28 +411,30 @@ class FancyButton:
         elif isinstance(widget, ttk.Checkbutton):
             self.widget_info[widget.winfo_name()] = 'checked' if widget.instate(['selected']) else 'unchecked'
         
-        # Recursively collect info for child widgets (e.g., in frames)
         if hasattr(widget, 'winfo_children'):
             for child in widget.winfo_children():
                 self._collect_widget_info_recursive(child)
 
-    def on_canvas_click(self, event, canvas):
-        x, y = event.x, event.y
-        self.widget_info[canvas.winfo_name()] = f"Clicked at ({x}, {y})"
-
     def recreate(self):
-        grid_info = self.outer_frame.grid_info()
-        self.outer_frame.destroy()
-        self.__init__(self.parent, self.create_surface, self.theme_var, self.dark_mode_var, self.command)
-        self.outer_frame.grid(**grid_info)
-        
+            grid_info = self.outer_frame.grid_info()
+            self.outer_frame.destroy()
+            self.__init__(self.parent, self.create_surface, self.theme_var, self.dark_mode_var, self.command)
+            self.outer_frame.grid(**grid_info)
+
+
+#############################
+#                           #
+#   Test app and examples   #
+#                           #
+#############################
+
 class FancyButtonTestApp:
     def __init__(self, root):
         self.root = root
         self.root.title("FancyButton Test Application")
         self.root.geometry("420x600")
 
-        self.radio_triggers_command = True
+        self.radio_triggers_command = True # Set for radio buttons to trigger the fancybutton click
 
         self.style = ttk.Style()
         self.theme_var = tk.StringVar(value="Clean")
@@ -342,9 +445,40 @@ class FancyButtonTestApp:
         self.main_frame.pack(expand=True, fill=tk.BOTH, padx=10, pady=10)
 
         self.toolbox_frame = ttk.Frame(self.main_frame, style='Toolbox.TFrame')
-        self.toolbox_frame.pack(expand=False, fill=tk.BOTH)
+        self.toolbox_frame.pack(expand=True, fill=tk.BOTH, padx=0, pady=0)
 
+        self.create_buttons()
 
+        self.extra_examples_frame = ttk.Frame(self.main_frame, style='Toolbox.TFrame')
+        self.extra_examples_frame.pack(expand=True, fill=tk.BOTH, padx=0, pady=0)
+
+        # Example 1: Simple label as a FancyButton 
+        FancyButton(self.extra_examples_frame, 
+                    lambda surface: [ttk.Label(surface, text="Example Label\nMade a Button", anchor="center", name="example_label_font12").pack(expand=True, fill=tk.BOTH)], 
+                    self.theme_var, self.dark_mode_var, self.example_label_click).outer_frame.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.BOTH)
+
+        # Example 2: LabelFrame as a FancyButton
+        FancyButton(self.extra_examples_frame,
+                    self.create_labelframe_button_surface,
+                    self.theme_var, self.dark_mode_var, self.labelframe_click).outer_frame.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.BOTH)
+
+        # Example 3: Multiple buttons in a FancyButton
+        FancyButton(self.extra_examples_frame,
+                    self.create_complex_button_surface,
+                    self.theme_var, self.dark_mode_var, self.complex_button_click).outer_frame.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.BOTH)
+
+        self.controls_frame = ttk.Frame(self.main_frame, style='Control.TFrame')
+        self.controls_frame.pack(pady=10)
+
+        self.toggle_theme_button = ttk.Button(self.controls_frame, text="Toggle Theme", command=self.toggle_theme)
+        self.toggle_theme_button.pack(side=tk.LEFT, padx=5)
+
+        self.dark_mode_check = ttk.Checkbutton(self.controls_frame, text="Dark Mode", variable=self.dark_mode_var, command=self.toggle_dark_mode)
+        self.dark_mode_check.pack(side=tk.LEFT, padx=5)
+
+        self.update_app_style()
+
+    def create_buttons(self):
         self.buttons = []
         button_configs = [
             ("taskmanager", self.create_taskmanager_surface, self.task_manager_click),
@@ -354,7 +488,7 @@ class FancyButtonTestApp:
             ("radiobutton", self.create_radiobutton_surface, self.radiobutton_click),
             ("scale", self.create_scale_surface, self.scale_click),
             ("listbox", self.create_listbox_surface, self.listbox_click),
-            ("canvas", self.create_canvas_surface, self.on_canvas_click),
+            ("canvas", self.create_canvas_surface, self.canvas_click),
             ("progressbar", self.create_progressbar_surface, self.progressbar_click)
         ]
 
@@ -368,113 +502,141 @@ class FancyButtonTestApp:
         for i in range(3):
             self.toolbox_frame.rowconfigure(i, weight=1)
 
-        control_frame = ttk.Frame(self.main_frame, style='Control.TFrame')
-        control_frame.pack(pady=10)
 
-        self.toggle_theme_button = ttk.Button(control_frame, text="Toggle Theme", command=self.toggle_theme)
-        self.toggle_theme_button.pack(side=tk.LEFT, padx=5)
+    def create_labelframe_button_surface(self, surface):
+        frame = ttk.LabelFrame(surface, text="LabelFrame Button", name="labelframe_font10")
+        frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        ttk.Label(frame, text="Content inside\nLabelFrame", anchor="center", name="labelframe_content_font10").pack(expand=True, fill=tk.BOTH)
+        return surface.winfo_children()
 
-        self.dark_mode_check = ttk.Checkbutton(control_frame, text="Dark Mode", variable=self.dark_mode_var, command=self.toggle_dark_mode)
-        self.dark_mode_check.pack(side=tk.LEFT, padx=5)
-
-        self.update_app_style()
-
-
-    def create_taskmanager_surface(self, surface):
-        ttk.Label(surface, text="Task Manager", anchor="center", width=12, name="tm_title_font8").pack(fill=tk.X, padx=5, pady=(2, 0))
-        ttk.Separator(surface, orient="horizontal").pack(fill=tk.X, padx=5, pady=0)
-        ttk.Label(surface, text="CPU:  0%", anchor="w", name="tm_cpu_font6").pack(fill=tk.X, padx=10, pady=(0, 0))
-        ttk.Label(surface, text="RAM:  0%", anchor="w", name="tm_ram_font6").pack(fill=tk.X, padx=10, pady=0)
-        ttk.Label(surface, text="DISK: 0%", anchor="w", name="tm_disk_font6").pack(fill=tk.X, padx=10, pady=0)
-        ttk.Label(surface, text="UP:   0 MB", anchor="w", name="tm_up_font6").pack(fill=tk.X, padx=10, pady=0)
-        ttk.Label(surface, text="DOWN: 0 MB", anchor="w", name="tm_down_font6").pack(fill=tk.X, padx=10, pady=(0, 2))
+    def create_complex_button_surface(self, surface):
+        ttk.Label(surface, text="Complex Button", name="complex_title_font12").pack(expand=True, fill=tk.BOTH)
+        ttk.Label(surface, text="Inner buttons\nalso press outer.", name="complex_label_font8").pack(expand=True, fill=tk.BOTH)
+        button_frame = ttk.Frame(surface)
+        button_frame.pack(expand=True, fill=tk.BOTH)
+        ttk.Button(button_frame, text="1", name="complex_button1_font10", width=3, command=self.inner_button1_click).pack(side=tk.LEFT, padx=2, expand=False)
+        ttk.Button(button_frame, text="2", name="complex_button2_font10", width=3, command=self.inner_button2_click).pack(side=tk.RIGHT, padx=2, expand=False)
         return surface.winfo_children()
 
 
-    def create_prompt_surface(self, surface):
-        ttk.Label(surface, text="Prompt Chooser", anchor="center", name="pc_title_font12").pack(fill=tk.X, padx=5, pady=(2, 0))
+    # Some fancy button surfaces - with instance vars
+    ##############################
+
+    def create_taskmanager_surface(self, surface):
+        self.tm_title = ttk.Label(surface, text="Task Manager", anchor="center", width=12, name="tm_title_font8")
+        self.tm_title.pack(fill=tk.X, padx=5, pady=(2, 0))
         ttk.Separator(surface, orient="horizontal").pack(fill=tk.X, padx=5, pady=0)
-        combobox = ttk.Combobox(surface, values=["Terminal", "PowerShell", "cmd"], state="readonly", width=10, name="pc_combo_font10")
-        combobox.set("Terminal")
-        combobox.pack(fill=tk.X, padx=5, pady=5)
+        self.tm_cpu = ttk.Label(surface, text="CPU:  0%", anchor="w", name="tm_cpu_font6")
+        self.tm_cpu.pack(fill=tk.X, padx=10, pady=(0, 0))
+        self.tm_ram = ttk.Label(surface, text="RAM:  0%", anchor="w", name="tm_ram_font6")
+        self.tm_ram.pack(fill=tk.X, padx=10, pady=0)
+        self.tm_disk = ttk.Label(surface, text="DISK: 0%", anchor="w", name="tm_disk_font6")
+        self.tm_disk.pack(fill=tk.X, padx=10, pady=0)
+        self.tm_up = ttk.Label(surface, text="UP:   0 MB", anchor="w", name="tm_up_font6")
+        self.tm_up.pack(fill=tk.X, padx=10, pady=0)
+        self.tm_down = ttk.Label(surface, text="DOWN: 0 MB", anchor="w", name="tm_down_font6")
+        self.tm_down.pack(fill=tk.X, padx=10, pady=(0, 2))
+        return surface.winfo_children()
+
+    def create_prompt_surface(self, surface):
+        self.pc_title = ttk.Label(surface, text="Prompt Chooser", anchor="center", name="pc_title_font10")
+        self.pc_title.pack(fill=tk.X, padx=5, pady=(2, 0))
+        ttk.Separator(surface, orient="horizontal").pack(fill=tk.X, padx=5, pady=0)
+        self.pc_combo = ttk.Combobox(surface, values=["Terminal", "PowerShell", "cmd"], state="readonly", width=10, name="pc_combo_font10")
+        self.pc_combo.set("Terminal")
+        self.pc_combo.pack(fill=tk.X, padx=5, pady=5)
         
-        bottom_frame = ttk.Frame(surface, name="pc_bottom_frame")
-        bottom_frame.pack(fill=tk.X, padx=5, pady=5)
+        self.pc_bottom_frame = ttk.Frame(surface, name="pc_bottom_frame")
+        self.pc_bottom_frame.pack(fill=tk.X, padx=5, pady=5)
         
         self.admin_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(bottom_frame, text="Admin", variable=self.admin_var, name="pc_admin_check_font10").pack(side=tk.LEFT)
-        ttk.Label(bottom_frame, text="Prompt", anchor="center", name="pc_prompt_font12").pack(side=tk.LEFT, padx=(5, 0))
-        
+        self.pc_admin_check = ttk.Checkbutton(self.pc_bottom_frame, text="Admin", variable=self.admin_var, name="pc_admin_check_font8")
+        self.pc_admin_check.pack(side=tk.LEFT)
+        self.pc_prompt = ttk.Label(self.pc_bottom_frame, text="PROMPT", anchor="center", name="pc_prompt_font12")
+        self.pc_prompt.pack(side=tk.LEFT, padx=(5, 0))
         return surface.winfo_children()
 
     def create_mouse_tracker_surface(self, surface):
-        ttk.Label(surface, text="Mouse Tracker", anchor="center", width=12, name="mt_title_font12").pack(fill=tk.X, padx=5, pady=(2, 0))
+        self.mt_title = ttk.Label(surface, text="Mouse Tracker", anchor="center", width=12, name="mt_title_font12")
+        self.mt_title.pack(fill=tk.X, padx=5, pady=(2, 0))
         ttk.Separator(surface, orient="horizontal").pack(fill=tk.X, padx=5, pady=0)
-        ttk.Label(surface, text="Pixel:          (0, 0)\nWindows:  (0, 0)", anchor="w", name="mt_coordinates_font8").pack(fill=tk.X, padx=10, pady=2)
-        ttk.Label(surface, text="Start Tracking", anchor="center", name="mt_start_font10").pack(fill=tk.BOTH, padx=5, pady=5, ipady=5)
+        self.mt_coordinates = ttk.Label(surface, text="Pixel:          (0, 0)\nWindows:  (0, 0)", anchor="w", name="mt_coordinates_font8")
+        self.mt_coordinates.pack(fill=tk.X, padx=10, pady=2)
+        self.mt_start = ttk.Label(surface, text="Start Tracking", anchor="center", name="mt_start_font10")
+        self.mt_start.pack(fill=tk.BOTH, padx=5, pady=5, ipady=5)
         return surface.winfo_children()
 
     def create_spinbox_surface(self, surface):
-        ttk.Label(surface, text="Spinbox", anchor="center", name="sb_title_font12").pack(fill=tk.X, padx=5, pady=(2, 0))
-        spinbox = ttk.Spinbox(surface, from_=0, to=10, width=6, name="sb_value_font10")
-        spinbox.pack(fill=tk.X, padx=5, pady=5)
-        ttk.Label(surface, text="Font Size 10", anchor="center", name="sb_label_font10").pack(fill=tk.X, padx=5, pady=(2, 0))
+        self.sb_title = ttk.Label(surface, text="Spinbox", anchor="center", name="sb_title_font12")
+        self.sb_title.pack(fill=tk.X, padx=5, pady=(2, 0))
+        self.sb_value = ttk.Spinbox(surface, from_=0, to=10, width=6, name="sb_value_font10")
+        self.sb_value.pack(fill=tk.X, padx=5, pady=5)
+        self.sb_label = ttk.Label(surface, text="Font Size 10", anchor="center", name="sb_label_font10")
+        self.sb_label.pack(fill=tk.X, padx=5, pady=(2, 0))
         return surface.winfo_children()
 
     def create_radiobutton_surface(self, surface):
-        ttk.Label(surface, text="Radiobutton", anchor="center", name="rb_title_font12").pack(fill=tk.X, padx=5, pady=(2, 0))
+        self.rb_title = ttk.Label(surface, text="Radiobutton", anchor="center", name="rb_title_font12")
+        self.rb_title.pack(fill=tk.X, padx=5, pady=(2, 0))
         self.radio_var = tk.StringVar(value="")  # No default selection
-        ttk.Radiobutton(surface, text="Option 1", variable=self.radio_var, value="Option 1", name="rb_option1_font8", 
-                        command=self.on_radio_click if self.radio_triggers_command else None).pack(fill=tk.X, padx=5, pady=5)
-        ttk.Radiobutton(surface, text="Option 2", variable=self.radio_var, value="Option 2", name="rb_option2_font12", 
-                        command=self.on_radio_click if self.radio_triggers_command else None).pack(fill=tk.X, padx=5, pady=5)
-        ttk.Label(surface, text="Font Size 6", anchor="center", name="rb_label_font6").pack(fill=tk.X, padx=5, pady=(2, 0))
+        self.rb_option1 = ttk.Radiobutton(surface, text="Option 1", variable=self.radio_var, value="Option 1", name="rb_option1_font8", 
+                        command=self.on_radio_click if self.radio_triggers_command else None)
+        self.rb_option1.pack(fill=tk.X, padx=5, pady=5)
+        self.rb_option2 = ttk.Radiobutton(surface, text="Option 2", variable=self.radio_var, value="Option 2", name="rb_option2_font12", 
+                        command=self.on_radio_click if self.radio_triggers_command else None)
+        self.rb_option2.pack(fill=tk.X, padx=5, pady=5)
+        self.rb_label = ttk.Label(surface, text="Font Size 6", anchor="center", name="rb_label_font6")
+        self.rb_label.pack(fill=tk.X, padx=5, pady=(2, 0))
         return surface.winfo_children()
 
     def create_scale_surface(self, surface):
-        ttk.Label(surface, text="Scale", anchor="center", name="sc_title_font12").pack(fill=tk.X, padx=5, pady=(2, 0))
-        scale = ttk.Scale(surface, from_=0, to=100, name="sc_value_font10")
-        scale.pack(fill=tk.X, padx=5, pady=5)
-        ttk.Label(surface, text="Font Size 10", anchor="center", name="sc_label_font10").pack(fill=tk.X, padx=5, pady=(2, 0))
+        self.sc_title = ttk.Label(surface, text="Scale", anchor="center", name="sc_title_font12")
+        self.sc_title.pack(fill=tk.X, padx=5, pady=(2, 0))
+        self.sc_value = ttk.Scale(surface, from_=0, to=100, name="sc_value_font10")
+        self.sc_value.pack(fill=tk.X, padx=5, pady=5)
+        self.sc_label = ttk.Label(surface, text="Font Size 10", anchor="center", name="sc_label_font10")
+        self.sc_label.pack(fill=tk.X, padx=5, pady=(2, 0))
         return surface.winfo_children()
 
     def create_listbox_surface(self, surface):
-        ttk.Label(surface, text="Listbox", anchor="center", name="lb_title_font12").pack(fill=tk.X, padx=5, pady=(2, 0))
+        self.lb_title = ttk.Label(surface, text="Listbox", anchor="center", name="lb_title_font12")
+        self.lb_title.pack(fill=tk.X, padx=5, pady=(2, 0))
         frame = ttk.Frame(surface)
         frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        self.listbox = tk.Listbox(frame, width=10, height=5, name="lb_items_font8")
-        scrollbar = ttk.Scrollbar(frame, orient="vertical", command=self.listbox.yview)
-        self.listbox.config(yscrollcommand=scrollbar.set)
-        self.listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.lb_items = tk.Listbox(frame, width=10, height=5, name="lb_items_font8")
+        scrollbar = ttk.Scrollbar(frame, orient="vertical", command=self.lb_items.yview)
+        self.lb_items.config(yscrollcommand=scrollbar.set)
+        self.lb_items.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         for i in range(1, 21):
-            self.listbox.insert(tk.END, f"Item {i}")
-        ttk.Label(surface, text="Font Size 8", anchor="center", name="lb_label_font8").pack(fill=tk.X, padx=5, pady=(2, 0))
+            self.lb_items.insert(tk.END, f"Item {i}")
+        self.lb_label = ttk.Label(surface, text="Font Size 8", anchor="center", name="lb_label_font8")
+        self.lb_label.pack(fill=tk.X, padx=5, pady=(2, 0))
         return surface.winfo_children()
 
     def create_canvas_surface(self, surface):
-        ttk.Label(surface, text="Canvas", anchor="center", name="cv_title_font12").pack(fill=tk.X, padx=5, pady=(2, 0))
-        canvas = tk.Canvas(surface, width=100, height=50, bg="white", name="cv_main")
-        canvas.pack(fill=tk.X, padx=5, pady=5)
-        canvas.create_oval(10, 10, 90, 40, fill="blue")
-        ttk.Label(surface, text="Font Size 12", anchor="center", name="cv_label_font12").pack(fill=tk.X, padx=5, pady=(2, 0))
+        self.cv_title = ttk.Label(surface, text="Canvas", anchor="center", name="cv_title_font12")
+        self.cv_title.pack(fill=tk.X, padx=5, pady=(2, 0))
+        self.cv_main = tk.Canvas(surface, width=100, height=50, bg="white", name="cv_main")
+        self.cv_main.pack(fill=tk.X, padx=5, pady=5)
+        self.cv_main.create_oval(10, 10, 90, 40, fill="blue")
+        self.cv_label = ttk.Label(surface, text="Font Size 12", anchor="center", name="cv_label_font12")
+        self.cv_label.pack(fill=tk.X, padx=5, pady=(2, 0))
         return surface.winfo_children()
 
     def create_progressbar_surface(self, surface):
-        ttk.Label(surface, text="Progressbar", anchor="center", name="pb_title_font12").pack(fill=tk.X, padx=5, pady=(2, 0))
-        progress = ttk.Progressbar(surface, value=50, name="pb_main")
-        progress.pack(fill=tk.X, padx=5, pady=5)
+        self.pb_title = ttk.Label(surface, text="Progressbar", anchor="center", name="pb_title_font12")
+        self.pb_title.pack(fill=tk.X, padx=5, pady=(2, 0))
+        self.pb_main = ttk.Progressbar(surface, value=50, name="pb_main")
+        self.pb_main.pack(fill=tk.X, padx=5, pady=5)
         
-        entry_frame = ttk.Frame(surface, name="pb_entry_frame")
-        entry_frame.pack(fill=tk.X, padx=5, pady=5)
+        self.pb_entry = ttk.Entry(surface, name="pb_entry_font10")
+        self.pb_entry.insert(0, "Neat!")  # Set default text
+        self.pb_entry.pack(fill=tk.X, padx=5, pady=5)
         
-        self.pb_entry = ttk.Entry(entry_frame, name="pb_entry_font10")
-        self.pb_entry.insert(0, "Neat!")
-        self.pb_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        
-        ttk.Label(surface, text="Font Size 10", anchor="center", name="pb_label_font10").pack(fill=tk.X, padx=5, pady=(2, 0))
+        self.pb_label = ttk.Label(surface, text="Font Size 10", anchor="center", name="pb_label_font10")
+        self.pb_label.pack(fill=tk.X, padx=5, pady=(2, 0))
         return surface.winfo_children()
-
 
     def update_app_style(self):
         theme = self.theme_var.get().lower()
@@ -510,7 +672,6 @@ class FancyButtonTestApp:
         self.update_app_style()
         self.recreate_buttons()
 
-
     def toggle_dark_mode(self):
         self.update_app_style()
         self.recreate_buttons()
@@ -518,9 +679,29 @@ class FancyButtonTestApp:
     def recreate_buttons(self):
         for button in self.buttons:
             button.recreate()
+        self.create_extra_examples()  # Recreate the extra examples
 
+    def example_label_click(self):
+        print("Example Label Clicked")
 
+    def labelframe_click(self):
+        print("LabelFrame Clicked")
+    
+    def complex_button_click(self):
+        print("Complex Button Clicked")
+        # Find the button in the extra examples
+        button = next((b for b in self.extra_examples_frame.winfo_children() if isinstance(b, FancyButton) and b.command == self.complex_button_click), None)
+        if button:
+            for widget, value in button.widget_info.items():
+                print(f"  {widget}: {value}")
+        else:
+            print("  Complex button not found")
+    
+    def inner_button1_click(self):
+        print("Inner Button 1 Clicked")
 
+    def inner_button2_click(self):
+        print("Inner Button 2 Clicked")
 
     def task_manager_click(self):
         print("Task Manager Clicked")
@@ -568,23 +749,23 @@ class FancyButtonTestApp:
     def listbox_click(self):
         print("Listbox Button Clicked")
         button = next(b for b in self.buttons if b.command == self.listbox_click)
-        listbox_info = button.widget_info.get("lb_items_font8", "Listbox not found")
-        print(f"  Selected item: {listbox_info}")
         
-        # For debugging, let's print the actual selection directly from the listbox
-        selection = self.listbox.curselection()
+        # Get the selected item directly from the listbox
+        selection = self.lb_items.curselection()
         if selection:
-            print(f"  Direct listbox selection: {self.listbox.get(selection[0])}")
+            selected_item = self.lb_items.get(selection[0])
+            print(f"  Selected item: {selected_item}")
         else:
-            print("  Direct listbox selection: No selection")
+            print("  No item selected")
 
+        # Print other widget info if any
         for widget, value in button.widget_info.items():
             if widget != "lb_items_font8":
                 print(f"  {widget}: {value}")
                 
-    def on_canvas_click(self):
+    def canvas_click(self):
         print("Canvas Button Clicked")
-        button = next(b for b in self.buttons if b.command == self.on_canvas_click)
+        button = next(b for b in self.buttons if b.command == self.canvas_click)
         for widget, value in button.widget_info.items():
             if widget == "cv_main" and value.startswith("Clicked at"):
                 print(f"  Canvas {value}")
@@ -598,44 +779,7 @@ class FancyButtonTestApp:
             print(f"  {widget}: {value}")
         print(f"  Entry content: {self.pb_entry.get()}")
 
-
-
 if __name__ == "__main__":
     root = tk.Tk()
     app = FancyButtonTestApp(root)
     root.mainloop()
-
-
-
-
-"""
-    #Find a widget by its name.
-    def find_widget_by_name(self, name):
-        return self.widget_dict.get(name)
-
-    # Update the text of a label identified by its name
-    def update_label_text(self, name, new_text):
-        widget = self.find_widget_by_name(name)
-        if widget and isinstance(widget, ttk.Label):
-            widget.config(text=new_text)
-        else:
-            print(f"Widget '{name}' not found or is not a Label.")
-
-
-
-    def update_task_manager_info(self):
-        self.update_label_text("cpu_font6", f"CPU:  {self.get_cpu_usage()}%")
-        self.update_label_text("ram_font6", f"RAM:  {self.get_ram_usage()}%")
-        self.update_label_text("disk_font6", f"DISK: {self.get_disk_usage()}%")
-        self.update_label_text("up_font6", f"UP:   {self.get_upload_speed()} MB")
-        self.update_label_text("down_font6", f"DOWN: {self.get_download_speed()} MB")
-
-    def task_manager_click(self):
-        print("Task Manager Clicked")
-        self.update_task_manager_info()
-        subprocess.Popen(["powershell", "-Command", "Start-Process taskmgr -Verb runAs"])
-        button = next(b for b in self.buttons if b.command == self.task_manager_click)
-        for widget, value in button.widget_info.items():
-            print(f"  {widget}: {value}")
-
-"""

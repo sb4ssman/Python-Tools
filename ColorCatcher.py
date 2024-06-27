@@ -20,6 +20,8 @@ VERSION = 1.0 # I am pleased with it.
 
 # Could add: better export options
 
+# Crosshair could be a color mask so it is always contrasting?
+
 
 import tkinter as tk
 from tkinter import filedialog, messagebox

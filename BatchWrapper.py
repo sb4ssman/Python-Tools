@@ -5,6 +5,8 @@ Created on Fri May 24 01:34:55 2024
 @author: Thomas
 """
 
+# NEED PANIC: make them actually work!
+
 # NEED to add comments and print statements! Can Windopener pick up the prints if this is called as an imported function? 
 # NEED to clean up debug statements and turn them into comments
 
@@ -12,7 +14,7 @@ Created on Fri May 24 01:34:55 2024
 
 # Standalone and intended companion to Windopener
 
-
+# Tooltips?
 
 # Only a few imports, for the: GUI, a timestamp, and fussing with the OS
 import datetime
@@ -31,6 +33,7 @@ class BatchWrapper:
         self.file_path = file_path
 
         self.root.title("BatchWrapper")
+        self.root.geometry("420x840")
 
 
         # Initialize variables
