@@ -6,7 +6,7 @@ Created on Thu May 16 03:55:49 2024
 """
 
 
-# I made this to test how my icons would look in the tray, and blown Up
+# I made this to test how my icons would look in the tray, and enlarged
 # You can add more than 3 icons to cycle through
 # define your icon, then make sure it's in the list
 

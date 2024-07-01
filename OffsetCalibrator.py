@@ -71,7 +71,7 @@ def calibrate_offset():
 
 
 
-# Neato burrito!
+# One-line app
 if __name__ == "__main__":
     print(calibrate_offset())
     
