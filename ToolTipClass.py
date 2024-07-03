@@ -6,6 +6,72 @@ Created on Sat Jun 6 10:14:14 2024
 """
 
 
+
+"""
+ToolTip Class for Tkinter
+-------------------------
+
+This module provides a customizable ToolTip class for Tkinter applications.
+It allows you to easily add tooltips to any Tkinter widget.
+
+Features:
+- Create tooltips for any Tkinter widget
+- Enable/disable tooltips dynamically
+- Update tooltip text on the fly
+- Two methods of creation: simple and named instance
+
+Usage:
+1. Simple Creation:
+   createToolTip(widget, "Tooltip text")
+   
+   This method automatically binds the tooltip to the widget and adds
+   tooltip-specific methods to the widget.
+
+2. Named Instance:
+   tooltip = createNamedToolTip(widget, "Tooltip text")
+   
+   This method returns a ToolTip instance, allowing for more direct control.
+
+Tooltip Management:
+- For tooltips created with Method 1:
+  widget.tt_get_text()  # Get current tooltip text
+  widget.tt_set_text("New text")  # Update tooltip text
+  widget.tt_enable()  # Enable tooltip
+  widget.tt_disable()  # Disable tooltip
+
+- For tooltips created with Method 2:
+  tooltip.text  # Get current tooltip text
+  tooltip.update_text("New text")  # Update tooltip text
+  tooltip.enable()  # Enable tooltip
+  tooltip.disable()  # Disable tooltip
+
+Example:
+  import tkinter as tk
+  from tooltip import createToolTip, createNamedToolTip
+
+  root = tk.Tk()
+
+  # Method 1
+  label1 = tk.Label(root, text="Hover me (Method 1)")
+  label1.pack()
+  createToolTip(label1, "This is a tooltip")
+
+  # Method 2
+  label2 = tk.Label(root, text="Hover me (Method 2)")
+  label2.pack()
+  tooltip2 = createNamedToolTip(label2, "This is another tooltip")
+
+  root.mainloop()
+
+Notes:
+- The ToolTip class can be easily integrated into existing Tkinter applications.
+- Tooltips are customizable in terms of appearance and behavior.
+- The module includes a demo class (TooltipDemo) that showcases various tooltip functionalities.
+
+For more detailed examples and advanced usage, refer to the TooltipDemo class in this file.
+"""
+
+
 ##############################
 #                            #
 #   TOOLTIP CLASS TEMPLATE   #
