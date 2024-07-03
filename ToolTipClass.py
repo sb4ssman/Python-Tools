@@ -86,23 +86,32 @@ For more detailed examples and advanced usage, refer to the TooltipDemo class in
 
 import tkinter as tk
 
+# Global default delay in milliseconds
+DEFAULT_TOOLTIP_DELAY = 500
 
 # ToolTip Class
 ###########################
 
 class ToolTip:
-    def __init__(self, widget, text):
+    def __init__(self, widget, text, delay=DEFAULT_TOOLTIP_DELAY):
         self.widget = widget
         self.text = text
+        self.delay = delay
         self.tipwindow = None
+        self.id = None
+        self.x = self.y = 0
         self.enabled = True
 
+    # Schedule showing of the tooltip
     def showtip(self):
-        "Display text in tooltip window"
-        if not self.enabled or self.tipwindow or not self.text: # Confirm it's supposed to draw or break out
+        self.hidetip()
+        if self.enabled and self.text:
+            self.id = self.widget.after(self.delay, self._show_tip)
+
+    # Actually show the tooltip
+    def _show_tip(self):
+        if not self.enabled or self.tipwindow:
             return
-        
-        # Edit this to change how the tips look (maybe don't edit it after all)
         x, y, _, _ = self.widget.bbox("insert")
         x = x + self.widget.winfo_rootx() + 25
         y = y + self.widget.winfo_rooty() + 25
@@ -110,15 +119,19 @@ class ToolTip:
         tw.wm_overrideredirect(1)
         tw.wm_geometry(f"+{x}+{y}")
         label = tk.Label(tw, text=self.text, justify=tk.LEFT,
-                      background="#ffffe0", relief=tk.SOLID, borderwidth=1,
-                      font=("tahoma", "8", "normal"))
+                         background="#ffffe0", relief=tk.SOLID, borderwidth=1,
+                         font=("tahoma", "8", "normal"))
         label.pack(ipadx=1)
 
+    # Hide the tooltip and cancel any scheduled showing
     def hidetip(self):
         tw = self.tipwindow
         self.tipwindow = None
         if tw:
             tw.destroy()
+        if self.id:
+            self.widget.after_cancel(self.id)
+            self.id = None
 
     def update_text(self, new_text):
         self.text = new_text
@@ -134,10 +147,11 @@ class ToolTip:
         self.hidetip()
 
     def remove(self):
+        self.hidetip()
         self.widget.unbind('<Enter>')
         self.widget.unbind('<Leave>')
 
-def createToolTip(widget, text):
+def createToolTip(widget, text, delay=DEFAULT_TOOLTIP_DELAY):
     toolTip = ToolTip(widget, text)
     def enter(event):
         try:
