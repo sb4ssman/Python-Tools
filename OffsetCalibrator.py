@@ -31,7 +31,7 @@ def calibrate_offset():
         # Compute offset (assuming 0,0 is expected)
         offsetX = -x0  # This formula is zero minus x0 
         offsetY = -y0
-        print(f"Offset: {offsetX}, {offsetY}")
+        print(f"Offset: {offsetX}, {offsetY}") # Window's origin is shifted in relation to the primary monitor origin pixel
         
         root.quit() # Exit the main loop
         

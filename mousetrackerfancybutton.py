@@ -399,7 +399,7 @@ class MouseTracker:
         self.root = root
         self.root.title("MouseTracker")
         self.root.geometry("200x200")
-        self.root.minsize(250, 250)
+        self.root.minsize(200, 200)
 
         self.tracking_mouse = False
         self.mouse_position_after_id = None
