@@ -19,6 +19,7 @@ Features:
 - Enable/disable tooltips dynamically
 - Update tooltip text on the fly
 - Two methods of creation: simple and named instance
+- Delay: global and per-tip
 
 Usage:
 1. Simple Creation:
