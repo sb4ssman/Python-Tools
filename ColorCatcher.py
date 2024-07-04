@@ -37,43 +37,99 @@ import time
 
 # I wanted one tooltip. 
 
+# Global default delay in milliseconds
+DEFAULT_TOOLTIP_DELAY = 500
+
+# ToolTip Class
+###########################
+
 class ToolTip:
-    def __init__(self, widget, text):
+    def __init__(self, widget, text, delay=DEFAULT_TOOLTIP_DELAY):
         self.widget = widget
         self.text = text
+        self.delay = delay
         self.tipwindow = None
         self.id = None
         self.x = self.y = 0
+        self.enabled = True
 
+    # Schedule showing of the tooltip
     def showtip(self):
-        "Display text in tooltip window" # "Snap and overlay a screenshot\nto collect uncooperative samples.\nEsc or spacebar will STOP."
-        x, y, cx, cy = self.widget.bbox("insert")
+        self.hidetip()
+        if self.enabled and self.text:
+            self.id = self.widget.after(self.delay, self._show_tip)
+
+    # Actually show the tooltip
+    def _show_tip(self):
+        if not self.enabled or self.tipwindow:
+            return
+        x, y, _, _ = self.widget.bbox("insert")
         x = x + self.widget.winfo_rootx() + 25
-        y = y + cy + self.widget.winfo_rooty() + 25
+        y = y + self.widget.winfo_rooty() + 25
         self.tipwindow = tw = tk.Toplevel(self.widget)
         tw.wm_overrideredirect(1)
-        tw.wm_geometry("+%d+%d" % (x, y))
-        tw.attributes("-topmost", True)  # Ensure tooltip is on top
+        tw.wm_geometry(f"+{x}+{y}")
         label = tk.Label(tw, text=self.text, justify=tk.LEFT,
-                      background="#ffffe0", relief=tk.SOLID, borderwidth=1,
-                      font=("tahoma", "8", "normal"))
+                         background="#ffffe0", relief=tk.SOLID, borderwidth=1,
+                         font=("tahoma", "8", "normal"))
         label.pack(ipadx=1)
 
+        # Force the tooltip to stay on top
+        tw.wm_attributes("-topmost", 1)
+
+    # Hide the tooltip and cancel any scheduled showing
     def hidetip(self):
         tw = self.tipwindow
         self.tipwindow = None
         if tw:
             tw.destroy()
+        if self.id:
+            self.widget.after_cancel(self.id)
+            self.id = None
 
-def createToolTip(widget, text):
+    def update_text(self, new_text):
+        self.text = new_text
+        if self.tipwindow:
+            label = self.tipwindow.winfo_children()[0]
+            label.config(text=self.text)
+
+    def enable(self):
+        self.enabled = True
+
+    def disable(self):
+        self.enabled = False
+        self.hidetip()
+
+    def remove(self):
+        self.hidetip()
+        self.widget.unbind('<Enter>')
+        self.widget.unbind('<Leave>')
+
+def createToolTip(widget, text, delay=DEFAULT_TOOLTIP_DELAY):
     toolTip = ToolTip(widget, text)
     def enter(event):
-        toolTip.showtip()
+        try:
+            toolTip.showtip()
+        except:
+            pass  # If showtip fails, we simply don't show the tooltip
     def leave(event):
         toolTip.hidetip()
     widget.bind('<Enter>', enter)
     widget.bind('<Leave>', leave)
 
+    widget.tooltip = toolTip
+    widget.tt_get_text = lambda: toolTip.text
+    widget.tt_set_text = toolTip.update_text
+    widget.tt_enable = toolTip.enable
+    widget.tt_disable = toolTip.disable
+    widget.tt_enabled = True
+
+
+def createNamedToolTip(widget, text):
+    tooltip = ToolTip(widget, text)
+    widget.bind('<Enter>', lambda event: tooltip.showtip())
+    widget.bind('<Leave>', lambda event: tooltip.hidetip())
+    return tooltip
 
 # Example Usage:
 # screenshot_checkbox = tk.Checkbutton(root, text="Use Screenshot")
@@ -138,6 +194,7 @@ class ColorCatcher:
 
         self.start_stop_button = ttk.Button(button_frame, text="Start", command=self.toggle_capture, style="Compact.TButton", width=6)
         self.start_stop_button.pack(side=tk.LEFT, padx=(0, 5))
+        createToolTip(self.start_stop_button, "Start the viewers! Then press 'C' to catch!")
         
         # self.start_stop_button.bind("<space>", lambda event: None)  # Prevent spacebar from triggering the button, so we can use it for color catching!
         # self.root.bind("<space>", lambda event: self.catch_color())  # Bind space to catch_color
@@ -145,6 +202,7 @@ class ColorCatcher:
 
         self.save_button = ttk.Button(button_frame, text="Save", command=self.save_colors, style="Compact.TButton", width=6)
         self.save_button.pack(side=tk.LEFT, padx=5)
+        createToolTip(self.save_button, "Save the caught colors to a .txt file.")
 
         # I rather like how this turned out
         self.instructions_hover = ttk.Label(button_frame, text="Hover for\ninstructions")
@@ -155,8 +213,9 @@ class ColorCatcher:
         zoom_dropdown = ttk.Combobox(button_frame, textvariable=self.zoom_multiplier, values=[1, 2, 3, 4, 8, 16, 32, 64, 128], width=3) # Any arbitrary integer should work
         zoom_dropdown.pack(side=tk.RIGHT, padx=0)
         zoom_dropdown.current(5) # default value = 16
-        ttk.Label(button_frame, text="1px =").pack(side=tk.RIGHT, padx=0)
-        createToolTip(zoom_dropdown, "Select pixel multiplier.\n" \
+        zoom_label = ttk.Label(button_frame, text="1px =")
+        zoom_label.pack(side=tk.RIGHT, padx=0)
+        createToolTip(zoom_label, "Select pixel multiplier.\n" \
                                             "You can input integer values, and\n" \
                                             "you can resize the window to view\n" \
                                             "more of the area around your mouse." \

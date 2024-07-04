@@ -124,6 +124,9 @@ class ToolTip:
                          font=("tahoma", "8", "normal"))
         label.pack(ipadx=1)
 
+        # Force the tooltip to stay on top
+        tw.wm_attributes("-topmost", 1)
+
     # Hide the tooltip and cancel any scheduled showing
     def hidetip(self):
         tw = self.tipwindow
