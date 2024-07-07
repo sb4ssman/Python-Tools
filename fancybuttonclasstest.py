@@ -1,4 +1,5 @@
 # Closest working one yet
+# Still self-contained, without detailed enumeration
 
 # ISSUES:
 

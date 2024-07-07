@@ -211,6 +211,7 @@ class FancyButton:
         self.update_style("Hover" if self.is_hovered else "")
 
     def on_inner_button_click(self, event, button):
+        print("Advanced Button clicked!")
         self.update_style("Click")
         self.collect_widget_info()
         if hasattr(button, 'invoke'):
@@ -218,7 +219,9 @@ class FancyButton:
 
     def on_inner_button_release(self, event, button):
         if self.is_mouse_within_bounds(event.x_root, event.y_root):
-            self.command()
+            print("Advanced Button Released!")
+            print("Inner buttons disconnected: Fancybutton command skipped!")
+            # self.command()
         self.update_style("Hover" if self.is_hovered else "")
 
     def on_interactive_widget_click(self, event, widget):
@@ -270,7 +273,13 @@ class FancyButton:
 
     def update_specific_widgets(self, widget, bg_color):
         for child in widget.winfo_children():
-            if isinstance(child, ttk.Checkbutton):
+            if isinstance(child, ttk.Button) and child['style'] == 'Link.TLabel':
+                child.configure(style='Link.TLabel')  # Ensure it keeps 'Link.TLabel' style
+                try:
+                    child.configure(background=bg_color)  # Apply background color
+                except:
+                    pass
+            elif isinstance(child, ttk.Checkbutton):
                 child.configure(style='TCheckbutton')
                 self.style.configure('TCheckbutton', background=bg_color)
             elif isinstance(child, ttk.Radiobutton):
@@ -398,8 +407,8 @@ class MouseTracker:
     def __init__(self, root):
         self.root = root
         self.root.title("MouseTracker")
-        self.root.geometry("200x200")
-        self.root.minsize(200, 200)
+        self.root.geometry("160x165")
+        self.root.minsize(160, 165)
 
         self.tracking_mouse = False
         self.mouse_position_after_id = None
@@ -421,14 +430,25 @@ class MouseTracker:
 
 
     def create_mouse_tracker_surface(self, surface):
-        self.mt_title = ttk.Label(surface, text="Mouse Tracker", anchor="center", width=12, name="mt_title_font12")
+        self.mt_title = ttk.Label(surface, text="Mouse Tracker", anchor="center", width=12, name="mt_title_font10")
         self.mt_title.pack(fill=tk.BOTH, padx=5, pady=5)
         ttk.Separator(surface, orient="horizontal").pack(fill=tk.X, padx=5, pady=0)
         self.mt_coordinates = ttk.Label(surface, text="Pixel:          (0, 0)\nWindows:  (0, 0)", anchor="w", name="mt_coordinates_font8")
         self.mt_coordinates.pack(fill=tk.X, padx=10, pady=2)
         self.mt_start = ttk.Label(surface, text="Start Tracking", anchor="center", name="mt_start_font10")
-        self.mt_start.pack(fill=tk.BOTH, padx=5, pady=5, ipady=5)
-        return surface.winfo_children()
+        self.mt_start.pack(fill=tk.BOTH, padx=5, pady=0, ipady=5)
+
+        # Custom interior button does not change with the surface
+        self.style = ttk.Style()
+        self.style.configure('Link.TLabel', background="#f0f0f0", font=("", 6))
+        self.style.map('Link.TLabel', foreground=[('hover', 'blue')])  # Change color to blue on hover
+
+        # Create a frame to hold the button
+        button_frame = ttk.Frame(surface)
+        button_frame.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=False, padx=0, pady=0)
+        
+        self.test_button = ttk.Button(button_frame, text="Advanced", style="Link.TLabel", command=self.test)
+        self.test_button.pack(side=tk.RIGHT, anchor="se", padx=0, pady=0)
 
 
     # Included a mouse x-y tracker
@@ -461,6 +481,8 @@ class MouseTracker:
                 self.root.after_cancel(self.mouse_position_after_id)
                 self.mouse_position_after_id = None
 
+    def test(self):
+        print("Test: PASSED")
 
 
 if __name__ == "__main__":
