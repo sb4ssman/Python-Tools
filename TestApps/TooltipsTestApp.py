@@ -35,18 +35,13 @@ import tkinter as tk
 import os
 import sys
 
-sys.path.append(r'C:\Users\tmill\Documents\GitHub')
-sys.path.append(r'C:\Users\tmill\Documents\GitHub\Python-Tools')
-
-print("Python version:", sys.version)
-print("Current working directory:", os.getcwd())
-print("Python path:", sys.path)
 
 try:
-    import python_tools
-    print("python_tools package found at:", python_tools.__file__)
+    import utils
+    from utils.ToolTips import createToolTip, createNamedToolTip
+    print("Successfully imported createToolTip and createNamedToolTip")
 except ImportError as e:
-    print("Failed to import python_tools:", str(e))
+    print("Failed to import:", str(e))
 
 
 class TooltipDemo:

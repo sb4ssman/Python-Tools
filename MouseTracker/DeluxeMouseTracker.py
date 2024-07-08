@@ -32,6 +32,13 @@ from screeninfo import get_monitors
 from datetime import datetime
 from PIL import ImageGrab, ImageTk, Image, ImageDraw
 
+
+# Import utilities from python_tools package
+from utils.ToolTips import createToolTip, createNamedToolTip
+from utils.TinyCheckbox import TinyCheckbox
+from utils.FancyButtonTEST import FancyButton, LIGHT_COLORS, DARK_COLORS
+from utils.OffsetCalibrator import calibrate_offset
+
 # Get the directory of the app
 app_directory = os.path.dirname(os.path.abspath(__file__))
 
@@ -40,39 +47,6 @@ os.chdir(app_directory)
 
 # Set settings path
 settings_path = os.path.join(app_directory, "settings.json")
-
-# Global default delay in milliseconds
-DEFAULT_TOOLTIP_DELAY = 500
-
-# Color schemes (from ColorCatcher)
-LIGHT_COLORS = {
-    'clean': {
-        'label_bg': "#e1e1e1",
-        'hover_bg': "#c7e0f4",
-        'click_bg': "#a9d1f5",
-        'border_color': "#adadad",
-        'hover_border': "#0078d7",
-        'click_border': "#005499",
-        'text_color': "#000000",
-        'labelframe_bg': "#f0f0f0",
-        'labelframe_fg': "#333333"
-    }
-}
-
-DARK_COLORS = {
-    'clean': {
-        'label_bg': "#2d2d2d",
-        'hover_bg': "#3a3a3a",
-        'click_bg': "#454545",
-        'border_color': "#555555",
-        'hover_border': "#777777",
-        'click_border': "#999999",
-        'text_color': "#ffffff",
-        'labelframe_bg': "#383838",
-        'labelframe_fg': "#ffffff"
-    }
-}
-
 
 
 
@@ -162,514 +136,6 @@ def start_appropriate_tracker(root):
 
 
 
-# ToolTip Class
-###########################
-
-class ToolTip:
-    def __init__(self, widget, text, delay=DEFAULT_TOOLTIP_DELAY):
-        self.widget = widget
-        self.text = text
-        self.delay = delay
-        self.tipwindow = None
-        self.id = None
-        self.x = self.y = 0
-        self.enabled = True
-        
-        # Bind the destruction of the widget to our cleanup method
-        self.bind_id = self.widget.bind("<Destroy>", self.on_destroy, add="+")
-
-    def showtip(self):
-        self.hidetip()
-        if self.enabled and self.text:
-            self.id = self.widget.after(self.delay, self._show_tip)
-
-    def _show_tip(self):
-        if not self.enabled or self.tipwindow or not self.widget.winfo_exists():
-            return
-        x, y, _, _ = self.widget.bbox("insert")
-        x = x + self.widget.winfo_rootx() + 25
-        y = y + self.widget.winfo_rooty() + 25
-        self.tipwindow = tw = tk.Toplevel(self.widget)
-        tw.wm_overrideredirect(1)
-        tw.wm_geometry(f"+{x}+{y}")
-        label = tk.Label(tw, text=self.text, justify=tk.LEFT,
-                         background="#ffffe0", relief=tk.SOLID, borderwidth=1,
-                         font=("tahoma", "8", "normal"))
-        label.pack(ipadx=1)
-        tw.wm_attributes("-topmost", 1)
-
-    def hidetip(self):
-        if self.tipwindow:
-            self.tipwindow.destroy()
-            self.tipwindow = None
-        if self.id:
-            self.widget.after_cancel(self.id)
-            self.id = None
-
-    def on_destroy(self, event):
-        self.hidetip()
-        if self.bind_id:
-            self.widget.unbind("<Destroy>", self.bind_id)
-            self.bind_id = None
-
-    def update_text(self, new_text):
-        self.text = new_text
-        if self.tipwindow:
-            label = self.tipwindow.winfo_children()[0]
-            label.config(text=self.text)
-
-    def enable(self):
-        self.enabled = True
-
-    def disable(self):
-        self.enabled = False
-        self.hidetip()
-
-def createToolTip(widget, text, delay=DEFAULT_TOOLTIP_DELAY):
-    toolTip = ToolTip(widget, text, delay)
-    
-    def enter(event):
-        toolTip.showtip()
-    
-    def leave(event):
-        toolTip.hidetip()
-    
-    widget.bind('<Enter>', enter, add="+")
-    widget.bind('<Leave>', leave, add="+")
-
-    # Store the tooltip object and related methods as attributes of the widget
-    widget.tooltip = toolTip
-    widget.tt_get_text = lambda: toolTip.text
-    widget.tt_set_text = toolTip.update_text
-    widget.tt_enable = toolTip.enable
-    widget.tt_disable = toolTip.disable
-    widget.tt_enabled = True
-
-
-def createNamedToolTip(widget, text):
-    tooltip = ToolTip(widget, text)
-    widget.bind('<Enter>', lambda event: tooltip.showtip())
-    widget.bind('<Leave>', lambda event: tooltip.hidetip())
-    return tooltip
-
-
-# Tiny checkbox class
-#########################
-
-class TinyCheckbox(tk.Frame):
-    def __init__(self, parent, text, variable, command=None):
-        super().__init__(parent)
-        self.variable = variable
-        self.command = command
-
-        # Create a tiny checkbox using Canvas
-        self.checkbox = tk.Canvas(self, width=10, height=10, highlightthickness=0)
-        self.checkbox.pack(side=tk.LEFT)
-        self.box = self.checkbox.create_rectangle(2, 2, 8, 8, outline='black')
-        self.check = self.checkbox.create_line(2, 5, 4, 7, 7, 3, fill='black', state='hidden')
-
-        # Create a tiny label
-        self.label = tk.Label(self, text=text, font=('TkDefaultFont', 6))
-        self.label.pack(side=tk.LEFT)
-
-        # Bind events
-        self.checkbox.bind('<Button-1>', self.toggle)
-        self.label.bind('<Button-1>', self.toggle)
-
-        # Initial state
-        self.update_state()
-
-    def toggle(self, event=None):
-        self.variable.set(not self.variable.get())
-        self.update_state()
-        if self.command:
-            self.command()
-
-    def update_state(self):
-        if self.variable.get():
-            self.checkbox.itemconfigure(self.check, state='normal')
-        else:
-            self.checkbox.itemconfigure(self.check, state='hidden')
-
-
-
-#########################
-#                       #
-#   FANCYBUTTON CLASS   #
-#                       #
-#########################
-
-class FancyButton:
-    def __init__(self, parent, create_surface, theme_var, dark_mode_var, command):
-        self.parent = parent
-        self.create_surface = create_surface
-        self.theme_var = theme_var
-        self.dark_mode_var = dark_mode_var
-        self.command = command
-        self.style = ttk.Style()
-        self.widget_info = {}
-        self.custom_attributes = {}
-
-        self.outer_frame = tk.Frame(self.parent, bd=0, highlightthickness=0)
-        self.inner_frame = tk.Frame(self.outer_frame, bd=0, highlightthickness=0)
-        self.inner_frame.pack(fill=tk.BOTH, expand=True, padx=1, pady=1)
-        self.surface = tk.Frame(self.inner_frame, bd=0, highlightthickness=0)
-        self.surface.pack(fill=tk.BOTH, expand=False, padx=0, pady=0)
-
-        self.widgets = self.create_surface(self.surface)
-
-        self.is_hovered = False
-        self.bind_events()
-        self.update_style("")
-
-    def create_widgets(self):
-        def wrapper(*args, **kwargs):
-            if 'font_size' in kwargs:
-                font_size = kwargs.pop('font_size')
-                widget = self.create_surface(self.surface)
-                for w in widget:
-                    if isinstance(w, (tk.Widget, ttk.Widget)):
-                        self.custom_attributes[w] = {'font_size': font_size}
-            else:
-                widget = self.create_surface(self.surface)
-            return widget
-        return wrapper()
-
-    def create_surface(self, surface):
-        widgets = self.create_surface(surface)
-        for widget in widgets:
-            if isinstance(widget, tk.Widget):  # Only apply font directly to tk widgets
-                font_size = self.get_font_size(widget)
-                if hasattr(widget, 'configure'):
-                    widget.configure(font=("TkDefaultFont", font_size))
-        return widgets
-
-    def bind_events(self):
-        self.outer_frame.bind("<Enter>", self.on_enter)
-        self.outer_frame.bind("<Leave>", self.on_leave)
-        self.outer_frame.bind("<Button-1>", self.on_click)
-        self.outer_frame.bind("<ButtonRelease-1>", self.on_release)
-        self.inner_frame.bind("<Button-1>", self.on_click)
-        self.inner_frame.bind("<ButtonRelease-1>", self.on_release)
-        self.surface.bind("<Button-1>", self.on_click)
-        self.surface.bind("<ButtonRelease-1>", self.on_release)
-        self.bind_children(self.surface)
-
-    def bind_children(self, widget):
-        for child in widget.winfo_children():
-            child.bind("<Enter>", lambda e, w=child: self.on_enter_child(e, w))
-            child.bind("<Leave>", lambda e, w=child: self.on_leave_child(e, w))
-            
-            if not isinstance(child, (ttk.Scrollbar, ttk.Entry, ttk.Spinbox, ttk.Combobox, ttk.Scale, ttk.Checkbutton)):
-                child.bind("<Button-1>", lambda e, w=child: self.on_click_child(e, w))
-                child.bind("<ButtonRelease-1>", lambda e, w=child: self.on_release_child(e, w))
-            
-            if isinstance(child, (ttk.Radiobutton)):
-                child.bind("<Button-1>", lambda e, w=child: self.on_interactive_widget_click(e, w), add="+")
-                child.bind("<ButtonRelease-1>", lambda e, w=child: self.on_interactive_widget_release(e, w), add="+")
-            
-            if isinstance(child, ttk.Button):
-                child.bind("<Button-1>", lambda e, w=child: self.on_inner_button_click(e, w))
-                child.bind("<ButtonRelease-1>", lambda e, w=child: self.on_inner_button_release(e, w))
-            
-            if hasattr(child, 'winfo_children'):
-                self.bind_children(child)
-
-    def update_interactive_widget_state(self, event, widget):
-        if isinstance(widget, ttk.Checkbutton):
-            widget.toggle()
-        elif isinstance(widget, ttk.Radiobutton):
-            widget.invoke()
-        self.update_style("Hover" if self.is_hovered else "")
-
-    def on_enter(self, event):
-        self.is_hovered = True
-        self.update_style("Hover")
-
-    def on_leave(self, event):
-        self.is_hovered = False
-        self.update_style("")
-
-    def on_click(self, event):
-        self.update_style("Click")
-        self.collect_widget_info()
-
-    def on_release(self, event):
-        if self.is_mouse_within_bounds(event.x_root, event.y_root):
-            self.command()
-        self.update_style("Hover" if self.is_hovered else "")
-
-    def on_enter_child(self, event, widget):
-        if not self.is_hovered:
-            self.is_hovered = True
-            self.update_style("Hover")
-
-    def on_leave_child(self, event, widget):
-        if not self.is_mouse_within_bounds(event.x_root, event.y_root):
-            self.is_hovered = False
-            self.update_style("")
-
-    def on_click_child(self, event, widget):
-        self.update_style("Click")
-        self.collect_widget_info()
-
-    def on_release_child(self, event, widget):
-        if self.is_mouse_within_bounds(event.x_root, event.y_root):
-            if isinstance(widget, tk.Canvas):
-                self.on_canvas_click(event, widget)
-            self.command()
-        self.update_style("Hover" if self.is_hovered else "")
-
-    def on_inner_button_click(self, event, button):
-        self.update_style("Click")
-        self.collect_widget_info()
-        if hasattr(button, 'invoke'):
-            button.invoke()
-
-    def on_inner_button_release(self, event, button):
-        if self.is_mouse_within_bounds(event.x_root, event.y_root):
-            self.command()
-        self.update_style("Hover" if self.is_hovered else "")
-
-    def on_interactive_widget_click(self, event, widget):
-        self.update_style("Click")
-        event.widget.event_generate("<<ThemeChanged>>")
-
-    def on_interactive_widget_release(self, event, widget):
-        if self.is_mouse_within_bounds(event.x_root, event.y_root):
-            self.collect_widget_info()
-        self.update_style("Hover" if self.is_hovered else "")
-        event.widget.event_generate("<<ThemeChanged>>")
-    
-    def on_canvas_click(self, event, canvas):
-        x, y = event.x, event.y
-        self.widget_info[canvas.winfo_name()] = f"Clicked at ({x}, {y})"
-
-    def update_style(self, state):
-        theme = self.theme_var.get().lower()
-        mode = "dark" if self.dark_mode_var.get() else "light"
-        colors = DARK_COLORS[theme] if mode == "dark" else LIGHT_COLORS[theme]
-
-        bg_color = colors['label_bg']
-        fg_color = colors['text_color']
-
-        if theme == "clean":
-            if state == "Hover":
-                self.outer_frame.config(bg=colors['hover_border'])
-                self.inner_frame.config(bg=colors['hover_bg'])
-                bg_color = colors['hover_bg']
-            elif state == "Click":
-                self.outer_frame.config(bg=colors['click_border'])
-                self.inner_frame.config(bg=colors['click_bg'])
-                bg_color = colors['click_bg']
-            else:
-                self.outer_frame.config(bg=colors['border_color'])
-                self.inner_frame.config(bg=colors['label_bg'])
-        elif theme == "retro":
-            self.outer_frame.config(bg=colors['border_color'], relief="raised", bd=2)
-            self.inner_frame.config(bg=colors['label_bg'])
-            if state == "Click":
-                self.outer_frame.config(relief="sunken")
-            else:
-                self.outer_frame.config(relief="raised")
-
-        self.surface.config(bg=self.inner_frame.cget("bg"))
-        self.style_descendants(self.surface, bg_color, fg_color, state)
-
-        self.update_specific_widgets(self.surface, bg_color)
-
-    def update_specific_widgets(self, widget, bg_color):
-        for child in widget.winfo_children():
-            if isinstance(child, ttk.Checkbutton):
-                child.configure(style='TCheckbutton')
-                self.style.configure('TCheckbutton', background=bg_color)
-            elif isinstance(child, ttk.Radiobutton):
-                child.configure(style='TRadiobutton')
-                self.style.configure('TRadiobutton', background=bg_color)
-            elif isinstance(child, ttk.Frame):
-                child.configure(style='TFrame')
-                self.style.configure('TFrame', background=bg_color)
-            elif isinstance(child, tk.Frame):
-                child.configure(bg=bg_color)
-            
-            if hasattr(child, 'winfo_children'):
-                self.update_specific_widgets(child, bg_color)
-        
-
-    def style_descendants(self, widget, bg_color, fg_color, state):
-        for child in widget.winfo_children():
-            if isinstance(child, ttk.Widget):
-                self.style_ttk_widget(child, bg_color, fg_color, state)
-            elif isinstance(child, tk.Widget):
-                self.style_tk_widget(child, bg_color, fg_color, state)
-
-            # if isinstance(child, (ttk.Frame, tk.Frame)):
-            #     child.configure(style='')
-            #     if isinstance(child, ttk.Frame):
-            #         self.style.configure('TFrame', background=bg_color)
-            #     else:
-            #         child.configure(bg=bg_color)
-
-            if hasattr(child, 'winfo_children'):
-                self.style_descendants(child, bg_color, fg_color, state)
-
-    def style_tk_widget(self, widget, bg_color, fg_color, state):
-        widget_class = widget.winfo_class()
-        font_size = self.get_font_size(widget)
-        if widget_class in ['Label', 'Button', 'Radiobutton', 'Checkbutton']:
-            widget.configure(bg=bg_color, fg=fg_color, font=("TkDefaultFont", font_size))
-        elif widget_class == 'Entry':
-            widget.configure(bg=bg_color, fg=fg_color, insertbackground=fg_color, font=("TkDefaultFont", font_size))
-        elif widget_class in ['Frame', 'Canvas']:
-            widget.configure(bg=bg_color)
-        elif widget_class == 'Listbox':
-            listbox_bg = "#ffffff" if self.theme_var.get().lower() in ["clean", "retro"] and not self.dark_mode_var.get() else bg_color
-            widget.configure(bg=listbox_bg, fg=fg_color, font=("TkDefaultFont", font_size))
-
-    def style_ttk_widget(self, widget, bg_color, fg_color, state):
-        widget_class = widget.winfo_class()
-        print(widget_class)
-        theme = self.theme_var.get().lower()
-        mode = "dark" if self.dark_mode_var.get() else "light"
-        colors = DARK_COLORS[theme] if mode == "dark" else LIGHT_COLORS[theme]
-        font_size = self.get_font_size(widget)
-
-        if theme == "clean":
-            if state == "Hover":
-                bg_color = colors['hover_bg']
-            elif state == "Click":
-                bg_color = colors['click_bg']
-
-        try:
-            if widget_class in ['TLabel', 'TCheckbutton', 'TRadiobutton', 'TFrame', 'TLabelframe']:
-                widget.configure(background=bg_color)
-                if widget_class in ['TLabel', 'TCheckbutton', 'TRadiobutton']:
-                    widget.configure(foreground=fg_color)
-            elif widget_class in ['TEntry', 'TSpinbox','TCombobox']:
-                widget.configure(background=bg_color, foreground=fg_color)
-            elif widget_class == 'TScale':
-                widget.configure(troughcolor=bg_color)
-            elif widget_class == 'TProgressbar':
-                if theme == "retro":
-                    widget.configure(background='blue', troughcolor='white' if mode == "light" else 'gray')
-                else:
-                    widget.configure(background=bg_color, troughcolor=bg_color)
-
-            # Apply font size directly to widgets that support it
-            if widget_class in ['TLabel', 'TCheckbutton', 'TRadiobutton', 'TEntry', 'TSpinbox', 'TCombobox']:
-                widget.configure(font=("TkDefaultFont", font_size))
-
-        except tk.TclError as error:
-            print(error)
-            pass  # Ignore if the widget doesn't support these options
-
-
-    def get_font_size(self, widget):
-        name = widget.winfo_name()
-        font_match = re.search(r'font(\d+)', name)
-        return int(font_match.group(1)) if font_match else 10  # default font size
-
-    def is_mouse_within_bounds(self, x_root, y_root):
-        left = self.outer_frame.winfo_rootx()
-        right = left + self.outer_frame.winfo_width()
-        top = self.outer_frame.winfo_rooty()
-        bottom = top + self.outer_frame.winfo_height()
-        return left <= x_root <= right and top <= y_root <= bottom
-
-    def collect_widget_info(self):
-        self.widget_info = {}
-        for widget in self.surface.winfo_children():
-            self._collect_widget_info_recursive(widget)
-
-    def _collect_widget_info_recursive(self, widget):
-        if isinstance(widget, tk.Listbox):
-            selection = widget.curselection()
-            if selection:
-                self.widget_info[widget.winfo_name()] = widget.get(selection[0])
-            else:
-                self.widget_info[widget.winfo_name()] = "No selection"
-        elif isinstance(widget, tk.Canvas):
-            self.widget_info[widget.winfo_name()] = "Canvas clicked"
-        elif hasattr(widget, 'get'):
-            self.widget_info[widget.winfo_name()] = widget.get()
-        elif isinstance(widget, ttk.Progressbar):
-            self.widget_info[widget.winfo_name()] = widget.cget('value')
-        elif isinstance(widget, ttk.Checkbutton):
-            self.widget_info[widget.winfo_name()] = 'checked' if widget.instate(['selected']) else 'unchecked'
-        
-        if hasattr(widget, 'winfo_children'):
-            for child in widget.winfo_children():
-                self._collect_widget_info_recursive(child)
-
-    def recreate(self):
-            grid_info = self.outer_frame.grid_info()
-            self.outer_frame.destroy()
-            self.__init__(self.parent, self.create_surface, self.theme_var, self.dark_mode_var, self.command)
-            self.outer_frame.grid(**grid_info)
-
-
-
-#########################
-#                       #
-#   OFFSET CALIBRATOR   #
-#                       #
-#########################
-
-
-class OffsetCalibrator:
-    def __init__(self, root, parent):
-        self.root = root
-        self.parent = parent
-        self.window = tk.Toplevel(self.root)
-        self.window.title('Offset Calibrator')
-        self.window.geometry("300x240+0+0")  # Place at Windows' version of (0, 0)
-        self.window.wm_attributes("-topmost", 1) # This line sets the window to stay on top
-
-        self.offsetX, self.offsetY = 0, 0
-        self.setup_gui()
-        print("OffsetCalibrator:\nCalibration window instantiated at Window's coordinate (0, 0)")
-
-    def setup_gui(self):
-        instructions_font = ("", 12)
-        # Text instructions above the button
-        instructions = tk.Label(self.window, text="This window was placed at (0,0).\n"
-                                                  "Move this window to the top-left corner\n"
-                                                  "of your primary monitor, then click\n"
-                                                  "'Calibrate'.\n\n"
-                                                  "Snapping to the corner works.\n"
-                                                  "Maximize does NOT.",
-                                justify=tk.LEFT, padx=10, font=instructions_font)
-        instructions.pack(pady=(10, 0))  # Add some padding above and below the label
-
-        button_font = ("", 16)
-        button = tk.Button(self.window, text="Calibrate", command=self.calibrate, font=button_font)
-        button.pack(fill="both", expand=True, padx=20, pady=20)
-
-    def calibrate(self):
-        # Get deets
-        x_o = self.window.winfo_x()
-        y_o = self.window.winfo_y()
-        print(f"Calibration window closed @ {x_o}, {y_o}")
-        
-        # Compute offset (assuming 0,0 is expected at the monitor's origin pixel, and the user got the window's critical pixel there)
-        self.offsetX = -x_o  # This formula is zero minus x_origin
-        self.offsetY = -y_o
-        print(f"Offset: {self.offsetX}, {self.offsetY}")
-        
-        self.window.destroy() # destroy the window immediately
-
-        messagebox.showinfo("Offset Calibrated!", f"Calibration window closed @ ({x_o}, {y_o})\n\n"
-                                                  f"The Windows virtual desktop origin is\n"
-                                                  f"translated:\n"
-                                                  f"        {self.offsetX} pixels horizontally\n"
-                                                  f"        {self.offsetY} pixels vertically\n"
-                                                  f"from your primary monitor's origin pixel.")
-        
-        # Update parent
-        self.parent.update_offset(self.offsetX, self.offsetY)
-
-
-
 
 ############################
 #                          #
@@ -689,14 +155,14 @@ class SimpleMouseTracker:
         
         self.root.minsize(160, 150)
 
-        self.tracking_mouse = False
-        self.mouse_position_after_id = None
-        
+        self.style = ttk.Style()
+        self.style.theme_use("xpnative")
+
         self.theme_var = tk.StringVar(value="Clean")
         self.dark_mode_var = tk.BooleanVar(value=False)
 
-        self.style = ttk.Style()
-        self.style.theme_use("xpnative")
+        self.tracking_mouse = False
+        self.mouse_position_after_id = None
 
         self.setup_gui()
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -770,9 +236,9 @@ class SimpleMouseTracker:
     # Do a calibrate
     def calibrate_offset(self):
         print("Calling OffsetCalibrator...")
-        OffsetCalibrator(self.root, self)
+        offsetX, offsetY = calibrate_offset()
+        self.update_offset(offsetX, offsetY)
 
-    # callback from calibrate
     def update_offset(self, offsetX, offsetY):
         global WIN_OFFSET_X, WIN_OFFSET_Y
         WIN_OFFSET_X = offsetX
@@ -780,8 +246,10 @@ class SimpleMouseTracker:
         settings.set("win_offset_x", offsetX)
         settings.set("win_offset_y", offsetY)
         x_w, y_w = 0 - WIN_OFFSET_X, 0 - WIN_OFFSET_Y
-        print(f"Updated global offsets: WIN_OFFSET_X = {WIN_OFFSET_X}, WIN_OFFSET_Y = {WIN_OFFSET_Y}")
+        print(f"Updated global offsets: X = {WIN_OFFSET_X}, Y = {WIN_OFFSET_Y}")
         self.mt_coordinates.config(text=f"Pixel:          (0, 0)\nWindows:  ({x_w}, {y_w})")
+        
+        self.update_notes_frame()
         
     def toggle_mouse_tracking(self):
         self.tracking_mouse = not self.tracking_mouse
@@ -851,18 +319,19 @@ class AdvancedMouseTracker:
             self.root.geometry("420x420")
         self.root.minsize(400, 221) # If you shrink the window to this minimum it lines up nicely
 
-        self.tracking_mouse = False
-        self.mouse_position_after_id = None
-        self.caught_coordinates = []
+        self.style = ttk.Style()
+        self.style.theme_use("xpnative")
 
-        self.theme_var = tk.StringVar(value="Clean")
+        self.theme_var = tk.StringVar(value="Clean") 
         self.dark_mode_var = tk.BooleanVar(value=False)
-        self.zoom_multiplier = tk.IntVar(value=16)
         self.stay_on_top_var = tk.BooleanVar(value=False)
         self.arrow_keys_move_mouse = tk.BooleanVar(value=False)
+        self.zoom_multiplier = tk.IntVar(value=16)
         self.always_advanced_var = tk.BooleanVar(value=settings.get("always_advanced")) # Default should be false
 
-        self.viewer_active = False  # Add this line
+        self.tracker_active = False
+        self.tracker_thread = False
+        self.viewer_active = False  
         self.viewer_thread = None
         self.texture_image = None
         self.stop_thread = threading.Event()
@@ -1104,9 +573,9 @@ class AdvancedMouseTracker:
     # Do a calibrate
     def calibrate_offset(self):
         print("Calling OffsetCalibrator...")
-        OffsetCalibrator(self.root, self)
+        offsetX, offsetY = calibrate_offset()
+        self.update_offset(offsetX, offsetY)
 
-    # Calibrate callback
     def update_offset(self, offsetX, offsetY):
         global WIN_OFFSET_X, WIN_OFFSET_Y
         WIN_OFFSET_X = offsetX

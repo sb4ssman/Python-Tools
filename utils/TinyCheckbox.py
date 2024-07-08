@@ -4,7 +4,10 @@ Created on Sat Jul 6 13:08:24 2024
 
 @author: Thomas
 """
+
 # This makes a custom itty bitty checkbutton
+
+import tkinter as tk
 
 # Tiny checkbox class
 #########################

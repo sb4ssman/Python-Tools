@@ -1,6 +1,6 @@
-from .tooltips import ToolTip, createToolTip, createNamedToolTip
-from .fancy_button import FancyButton
-from .offset_calibrator import OffsetCalibrator
-from .tiny_checkbox import TinyCheckbox
+from .ToolTips import createToolTip, createNamedToolTip
+from .FancyButtonTEST import FancyButton
+from .OffsetCalibrator import calibrate_offset
+from .TinyCheckbox import TinyCheckbox
 
-__all__ = ['FancyButton', 'ToolTip', 'OffsetCalibrator', 'TinyCheckbox', 'createToolTip', 'createNamedToolTip']
+__all__ = ['FancyButton', 'OffsetCalibrator', 'TinyCheckbox', 'ToolTip', 'createToolTip', 'createNamedToolTip']

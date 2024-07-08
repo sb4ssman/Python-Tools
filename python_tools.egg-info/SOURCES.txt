@@ -1,7 +1,25 @@
 README.md
 setup.py
+BatchWrapper/BatchWrapper.py
+BatchWrapper/__init__.py
+ColorCatcher/ColorCatcher.py
+ColorCatcher/__init__.py
+MouseTracker/DeluxeMouseTracker.py
+MouseTracker/__init__.py
+MouseTracker/mousetrackerfancierbutton.py
+MouseTracker/mousetrackerfancybutton.py
+Scraps/PyQt5trayDBLclicktest.py
+Scraps/Task button tester.py
+Scraps/__init__.py
+Scraps/offset_calibrator.py
+Scraps/placement xy test.py
+Scraps/pythonpixelcoordinates.py
+Scraps/pyvda_test.py
+Scraps/tmb test 18.py
+Scraps/tmb test4.py
 TestApps/TooltipsTestApp.py
 TestApps/__init__.py
+Tools-Lab/__init__.py
 python_tools.egg-info/PKG-INFO
 python_tools.egg-info/SOURCES.txt
 python_tools.egg-info/dependency_links.txt
