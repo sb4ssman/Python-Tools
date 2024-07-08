@@ -41,10 +41,6 @@ os.chdir(app_directory)
 # Set settings path
 settings_path = os.path.join(app_directory, "settings.json")
 
-# Constants - NEED to connect to settings.json
-WIN_OFFSET_X = 7
-WIN_OFFSET_Y = 0
-
 # Global default delay in milliseconds
 DEFAULT_TOOLTIP_DELAY = 500
 
@@ -110,10 +106,11 @@ class Settings:
     def __init__(self):
         self.settings_path = os.path.join(app_directory, "settings.json")
         self.default_settings = {
+            "app_settings": {
             "win_offset_x": 0,
             "win_offset_y": 0,
             "always_advanced": False
-        }
+        }}
         self.settings = self.load_settings()
 
     def load_settings(self):
@@ -748,7 +745,7 @@ class SimpleMouseTracker:
         self.root.bind('<Button-1>', self.start_move) # for dragging
         self.root.bind('<B1-Motion>', self.do_move)
 
-        self.cancel_button = ttk.Button(self.main_frame, text="Cancel", width=8, command=self.root.quit)
+        self.cancel_button = ttk.Button(self.main_frame, text="Cancel", width=8, command=self.on_closing)
         self.cancel_button.pack(padx=5, pady=5)
 
     # The fancy button
@@ -980,7 +977,11 @@ class AdvancedMouseTracker:
         # Instructions label
         self.instructions_hover = ttk.Label(self.home_frame, text="[Hover for info]")
         self.instructions_hover.grid(row=0, column=0, columnspan=2, sticky="w", padx=0, pady=0)
-        createToolTip(self.instructions_hover, "Instructions: Activate the tracker and/or viewer.\nPress C to catch coordinates while tracking.\nCalibrate offset or view environment details.")
+        createToolTip(self.instructions_hover, "Instructions: Activate the tracker and/or viewer.\n"
+                                                "Press C to catch coordinates while tracking.\n"
+                                                "Calibrate offset or view environment details.\n"
+                                                "Locate a coordinate. Click captured coords\n"
+                                                "to see them located again.")
 
         # Stay on top
         self.stay_on_top_checkbox = ttk.Checkbutton(self.home_frame, text="Stay on Top", variable=self.stay_on_top_var, command=self.toggle_stay_on_top)

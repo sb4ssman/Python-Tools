@@ -123,7 +123,7 @@ class ToolTip:
         tw.wm_geometry(f"+{x}+{y}")
         label = tk.Label(tw, text=self.text, justify=tk.LEFT,
                          background="#ffffe0", relief=tk.SOLID, borderwidth=1,
-                         font=("tahoma", "8", "normal"))
+                         font=("tahoma", "8", "normal")) # , wraplength=300; can include a wrap length if expecting long tips
         label.pack(ipadx=1)
         tw.wm_attributes("-topmost", 1)
 
@@ -205,7 +205,7 @@ def createNamedToolTip(widget, text):
 class TooltipDemo:
     def __init__(self, master):
         self.master = master
-        master.geometry("400x300")
+        master.geometry("350x250")
         master.title("Tooltip Demo")
 
         # Method 1: Using createToolTip (original method)
