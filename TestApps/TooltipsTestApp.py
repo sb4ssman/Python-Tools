@@ -32,16 +32,28 @@ Created on Sun Jun 7 17:37:45 2024
 
 import tkinter as tk
 
-import os
 import sys
+import os
 
+# print("Python version:", sys.version)
+# print("Current working directory:", os.getcwd())
+# print("Python path:", sys.path)
 
-try:
-    import utils
-    from utils.ToolTips import createToolTip, createNamedToolTip
-    print("Successfully imported createToolTip and createNamedToolTip")
-except ImportError as e:
-    print("Failed to import:", str(e))
+# try:
+#     from utils.ToolTips import createToolTip, createNamedToolTip
+# except ImportError as e:
+#     print(f"Failed to import from utils.ToolTips: {e}")
+#     print("Contents of current directory:", os.listdir())
+#     print("Contents of utils directory:", os.listdir("utils"))
+    
+#     # Try absolute import
+#     try:
+#         from python_tools.utils.ToolTips import createToolTip, createNamedToolTip
+#         print("Successfully imported using absolute import")
+#     except ImportError as e:
+#         print(f"Failed to import using absolute import: {e}")
+
+from utils.ToolTips import createToolTip, createNamedToolTip
 
 
 class TooltipDemo:

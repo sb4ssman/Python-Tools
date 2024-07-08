@@ -14,6 +14,9 @@ from setuptools import setup, find_packages
 setup(
     name="python_tools",
     version="0.1",
+    author="sb4ssman",
+    author_email="sb4ssman@proton.me",
+    description="A suite of python tools",
     packages=find_packages(),
     package_dir={'python_tools': '.'},
     install_requires=[

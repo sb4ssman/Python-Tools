@@ -110,22 +110,28 @@ class ToolTip:
     def showtip(self):
         self.hidetip()
         if self.enabled and self.text:
-            self.id = self.widget.after(self.delay, self._show_tip)
+            try:
+                self.id = self.widget.after(self.delay, self._show_tip)
+            except Exception as e:
+                print(f"Error in showtip: {e}")
 
     def _show_tip(self):
         if not self.enabled or self.tipwindow or not self.widget.winfo_exists():
             return
-        x, y, _, _ = self.widget.bbox("insert")
-        x = x + self.widget.winfo_rootx() + 25
-        y = y + self.widget.winfo_rooty() + 25
-        self.tipwindow = tw = tk.Toplevel(self.widget)
-        tw.wm_overrideredirect(1)
-        tw.wm_geometry(f"+{x}+{y}")
-        label = tk.Label(tw, text=self.text, justify=tk.LEFT,
-                         background="#ffffe0", relief=tk.SOLID, borderwidth=1,
-                         font=("tahoma", "8", "normal")) # , wraplength=300; can include a wrap length if expecting long tips
-        label.pack(ipadx=1)
-        tw.wm_attributes("-topmost", 1)
+        try:
+            x, y, _, _ = self.widget.bbox("insert")
+            x = x + self.widget.winfo_rootx() + 25
+            y = y + self.widget.winfo_rooty() + 25
+            self.tipwindow = tw = tk.Toplevel(self.widget)
+            tw.wm_overrideredirect(1)
+            tw.wm_geometry(f"+{x}+{y}")
+            label = tk.Label(tw, text=self.text, justify=tk.LEFT,
+                            background="#ffffe0", relief=tk.SOLID, borderwidth=1,
+                            font=("tahoma", "8", "normal"))
+            label.pack(ipadx=1)
+            tw.wm_attributes("-topmost", 1)
+        except Exception as e:
+            print(f"Error in _show_tip: {e}")
 
     def hidetip(self):
         if self.tipwindow:

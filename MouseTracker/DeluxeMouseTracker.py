@@ -48,6 +48,10 @@ os.chdir(app_directory)
 # Set settings path
 settings_path = os.path.join(app_directory, "settings.json")
 
+# This goes with appbardata to capture information about the taskbar's position and size; yes it needs to be here
+ABM_GETTASKBARPOS = 0x00000005 # Constants for SHAppBarMessage
+
+WIN_OFFSET_X = WIN_OFFSET_Y = 0
 
 
 # Split self.geometry into coords and dimensions
@@ -78,14 +82,24 @@ class APPBARDATA(ctypes.Structure):
 
 class Settings:
     def __init__(self):
-        self.settings_path = os.path.join(app_directory, "settings.json")
+        global settings_path, WIN_OFFSET_X, WIN_OFFSET_Y
+        self.settings_path = settings_path
         self.default_settings = {
             "app_settings": {
             "win_offset_x": 0,
             "win_offset_y": 0,
-            "always_advanced": False
+            "always_advanced": False,
+            "calibrated": False
         }}
-        self.settings = self.load_settings()
+        if not os.path.exists(self.settings_path):
+            self.settings = self.default_settings.copy()
+            self.save_settings()
+        else:
+            self.settings = self.load_settings()
+        
+        # Update global variables
+        WIN_OFFSET_X = self.settings["app_settings"].get("win_offset_x", 0)
+        WIN_OFFSET_Y = self.settings["app_settings"].get("win_offset_y", 0)
 
     def load_settings(self):
         if os.path.exists(self.settings_path):
@@ -96,36 +110,41 @@ class Settings:
                     if key not in loaded_settings:
                         loaded_settings[key] = value
                 return loaded_settings
-        return self.default_settings.copy()
+    
 
     def save_settings(self):
         with open(self.settings_path, 'w') as f:
             json.dump(self.settings, f)
 
-    def get(self, key):
-        return self.settings.get(key, self.default_settings.get(key))
+    def get(self, key, default=None):
+        return self.settings["app_settings"].get(key, default)
 
     def set(self, key, value):
         self.settings[key] = value
         self.save_settings()
 
+    def is_calibrated(self):
+      return self.settings["app_settings"].get("is_calibrated", False)
+    
+    def set_calibration_complete(self):
+        self.settings["app_settings"]["is_calibrated"] = True
+        self.save_settings()
+
 # Global settings instance
 settings = Settings()
 
-# Update the global offset variables
-WIN_OFFSET_X = settings.get("win_offset_x")
-WIN_OFFSET_Y = settings.get("win_offset_y")
 
 # The pre-app:
 ################
 def check_settings_exist():
     print("Checking settings.json...")
-    if not os.path.exists(settings_path):
-        print("No settings found! Proceeding with warning and the simple tracker...")
-        messagebox.showinfo("No Settings Found", "No settings file found.\nPlease calibrate the offset for accurate tracking.")
+    if not settings.is_calibrated():
+        print("No calibration found! Prompting user to calibrate...")
+        messagebox.showinfo("Calibration Required", "It looks like you haven't calibrated the offset for accurate tracking yet.\nPlease calibrate now.")
+
 
 def start_appropriate_tracker(root):
-    always_advanced = settings.get("always_advanced")
+    always_advanced = settings.get("app_settings", {}).get("always_advanced", False)
     print(f"Always Advanced setting: {always_advanced}")  # Debug print
     if always_advanced:
         print("Starting Advanced Mouse Tracker")
@@ -161,14 +180,15 @@ class SimpleMouseTracker:
         self.theme_var = tk.StringVar(value="Clean")
         self.dark_mode_var = tk.BooleanVar(value=False)
 
-        self.tracking_mouse = False
+        self.tracker_active = False
         self.mouse_position_after_id = None
 
         self.setup_gui()
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
-        global WIN_OFFSET_X, WIN_OFFSET_Y
-        x_w, y_w = 0 - WIN_OFFSET_X, 0 - WIN_OFFSET_Y
+        win_offset_x = settings.get("win_offset_x", 0)
+        win_offset_y = settings.get("win_offset_y", 0)
+        x_w, y_w = 0 - win_offset_x, 0 - win_offset_y
         # print(f"Updated global offsets: WIN_OFFSET_X = {WIN_OFFSET_X}, WIN_OFFSET_Y = {WIN_OFFSET_Y}")
         self.mt_coordinates.config(text=f"Pixel:          (0, 0)\nWindows:  ({x_w}, {y_w})")
         
@@ -238,23 +258,21 @@ class SimpleMouseTracker:
         print("Calling OffsetCalibrator...")
         offsetX, offsetY = calibrate_offset()
         self.update_offset(offsetX, offsetY)
-
+        settings.set_calibration_complete()  
+        
     def update_offset(self, offsetX, offsetY):
-        global WIN_OFFSET_X, WIN_OFFSET_Y
-        WIN_OFFSET_X = offsetX
-        WIN_OFFSET_Y = offsetY
-        settings.set("win_offset_x", offsetX)
-        settings.set("win_offset_y", offsetY)
-        x_w, y_w = 0 - WIN_OFFSET_X, 0 - WIN_OFFSET_Y
-        print(f"Updated global offsets: X = {WIN_OFFSET_X}, Y = {WIN_OFFSET_Y}")
+        settings.set("app_settings", {
+            "win_offset_x": offsetX,
+            "win_offset_y": offsetY
+        })
+        x_w, y_w = 0 - offsetX, 0 - offsetY
+        print(f"Updated offsets: X = {offsetX}, Y = {offsetY}")
         self.mt_coordinates.config(text=f"Pixel:          (0, 0)\nWindows:  ({x_w}, {y_w})")
         
-        self.update_notes_frame()
-        
     def toggle_mouse_tracking(self):
-        self.tracking_mouse = not self.tracking_mouse
+        self.tracker_active = not self.tracker_active
         
-        if self.tracking_mouse:
+        if self.tracker_active:
             print("Mouse Tracking: ACTIVE")
             self.mt_start.config(text="Stop Tracking")
             self.mouse_position()
@@ -291,14 +309,12 @@ class SimpleMouseTracker:
         x = self.root.winfo_x() + deltax
         y = self.root.winfo_y() + deltay
         self.root.geometry(f"+{x}+{y}")
-    
+
     def on_closing(self):
         if self.mouse_position_after_id:
             self.root.after_cancel(self.mouse_position_after_id)
         settings.save_settings()  # Save settings before closing
         self.root.destroy()
-
-
 
 
 
@@ -327,14 +343,16 @@ class AdvancedMouseTracker:
         self.stay_on_top_var = tk.BooleanVar(value=False)
         self.arrow_keys_move_mouse = tk.BooleanVar(value=False)
         self.zoom_multiplier = tk.IntVar(value=16)
-        self.always_advanced_var = tk.BooleanVar(value=settings.get("always_advanced")) # Default should be false
+        self.always_advanced_var = tk.BooleanVar(value=settings.get("app_settings", {}).get("always_advanced", False))
 
+        self.caught_coordinates = []
         self.tracker_active = False
         self.tracker_thread = False
         self.viewer_active = False  
         self.viewer_thread = None
         self.texture_image = None
         self.stop_thread = threading.Event()
+        self.mouse_position_after_id = None
 
         self.setup_gui()
         self.setup_texture()
@@ -568,25 +586,25 @@ class AdvancedMouseTracker:
 ###################################
 
     def toggle_always_advanced(self):
-        settings.set("always_advanced", self.always_advanced_var.get())
+        settings.set("app_settings", {"always_advanced": self.always_advanced_var.get()})
+        print(settings)
 
     # Do a calibrate
     def calibrate_offset(self):
         print("Calling OffsetCalibrator...")
         offsetX, offsetY = calibrate_offset()
         self.update_offset(offsetX, offsetY)
+        settings.set_calibration_complete() 
 
     def update_offset(self, offsetX, offsetY):
-        global WIN_OFFSET_X, WIN_OFFSET_Y
-        WIN_OFFSET_X = offsetX
-        WIN_OFFSET_Y = offsetY
-        settings.set("win_offset_x", offsetX)
-        settings.set("win_offset_y", offsetY)
-        x_w, y_w = 0 - WIN_OFFSET_X, 0 - WIN_OFFSET_Y
-        print(f"Updated global offsets: X = {WIN_OFFSET_X}, Y = {WIN_OFFSET_Y}")
+        settings.set("app_settings", {
+            "win_offset_x": offsetX,
+            "win_offset_y": offsetY
+        })
+        x_w, y_w = 0 - offsetX, 0 - offsetY
+        print(f"Updated offsets: X = {offsetX}, Y = {offsetY}")
         self.mt_coordinates.config(text=f"Pixel:          (0, 0)\nWindows:  ({x_w}, {y_w})")
-        
-        self.update_notes_frame()
+        self.update_notes_frame() 
 
     def update_notes_frame(self):
         global WIN_OFFSET_X, WIN_OFFSET_Y
@@ -681,7 +699,7 @@ class AdvancedMouseTracker:
                 y += move_distance
 
             pyautogui.moveTo(x, y)
-            self.update_mouse_position()
+            # self.update_mouse_position()
 
 
     def setup_texture(self):
@@ -815,8 +833,8 @@ class AdvancedMouseTracker:
 
 
     def toggle_tracking(self):
-        self.tracking_mouse = not self.tracking_mouse
-        if self.tracking_mouse:
+        self.tracker_active = not self.tracker_active
+        if self.tracker_active:
             self.mt_start.config(text="Stop Tracking")
             self.update_mouse_position()
         else:
@@ -832,7 +850,7 @@ class AdvancedMouseTracker:
         self.mouse_position_after_id = self.root.after(100, self.update_mouse_position)
 
     def catch_coordinate(self):
-        if self.tracking_mouse:
+        if self.tracker_active:
             x_m, y_m = pyautogui.position()
             x_w, y_w = x_m - WIN_OFFSET_X, y_m - WIN_OFFSET_Y
             coordinate = f"Pixel: ({x_m},{y_m}), Windows: ({x_w},{y_w})"
@@ -1012,7 +1030,6 @@ class AdvancedMouseTracker:
             self.root.after_cancel(self.mouse_position_after_id)
         settings.save_settings()  # Save settings before closing
         self.root.destroy()
-
 
 # In your main script:
 if __name__ == "__main__":
