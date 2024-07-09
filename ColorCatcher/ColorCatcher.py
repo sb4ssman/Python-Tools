@@ -22,7 +22,8 @@ VERSION = 1.0 # I am pleased with it.
 
 # Crosshair could be a color mask so it is always contrasting?
 
-
+import sys
+import os
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from tkinter import ttk
@@ -33,108 +34,111 @@ import pyautogui
 import threading
 import time
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) # path statement so import works
+
+from utils.ToolTips import createToolTip, createNamedToolTip
 
 
-# I wanted one tooltip. 
+# # I wanted one tooltip. 
 
-# Global default delay in milliseconds
-DEFAULT_TOOLTIP_DELAY = 500
+# # Global default delay in milliseconds
+# DEFAULT_TOOLTIP_DELAY = 500
 
-# ToolTip Class
-###########################
+# # ToolTip Class
+# ###########################
 
-class ToolTip:
-    def __init__(self, widget, text, delay=DEFAULT_TOOLTIP_DELAY):
-        self.widget = widget
-        self.text = text
-        self.delay = delay
-        self.tipwindow = None
-        self.id = None
-        self.x = self.y = 0
-        self.enabled = True
+# class ToolTip:
+#     def __init__(self, widget, text, delay=DEFAULT_TOOLTIP_DELAY):
+#         self.widget = widget
+#         self.text = text
+#         self.delay = delay
+#         self.tipwindow = None
+#         self.id = None
+#         self.x = self.y = 0
+#         self.enabled = True
         
-        # Bind the destruction of the widget to our cleanup method
-        self.bind_id = self.widget.bind("<Destroy>", self.on_destroy, add="+")
+#         # Bind the destruction of the widget to our cleanup method
+#         self.bind_id = self.widget.bind("<Destroy>", self.on_destroy, add="+")
 
-    def showtip(self):
-        self.hidetip()
-        if self.enabled and self.text:
-            self.id = self.widget.after(self.delay, self._show_tip)
+#     def showtip(self):
+#         self.hidetip()
+#         if self.enabled and self.text:
+#             self.id = self.widget.after(self.delay, self._show_tip)
 
-    def _show_tip(self):
-        if not self.enabled or self.tipwindow or not self.widget.winfo_exists():
-            return
-        x, y, _, _ = self.widget.bbox("insert")
-        x = x + self.widget.winfo_rootx() + 25
-        y = y + self.widget.winfo_rooty() + 25
-        self.tipwindow = tw = tk.Toplevel(self.widget)
-        tw.wm_overrideredirect(1)
-        tw.wm_geometry(f"+{x}+{y}")
-        label = tk.Label(tw, text=self.text, justify=tk.LEFT,
-                         background="#ffffe0", relief=tk.SOLID, borderwidth=1,
-                         font=("tahoma", "8", "normal"))
-        label.pack(ipadx=1)
-        tw.wm_attributes("-topmost", 1)
+#     def _show_tip(self):
+#         if not self.enabled or self.tipwindow or not self.widget.winfo_exists():
+#             return
+#         x, y, _, _ = self.widget.bbox("insert")
+#         x = x + self.widget.winfo_rootx() + 25
+#         y = y + self.widget.winfo_rooty() + 25
+#         self.tipwindow = tw = tk.Toplevel(self.widget)
+#         tw.wm_overrideredirect(1)
+#         tw.wm_geometry(f"+{x}+{y}")
+#         label = tk.Label(tw, text=self.text, justify=tk.LEFT,
+#                          background="#ffffe0", relief=tk.SOLID, borderwidth=1,
+#                          font=("tahoma", "8", "normal"))
+#         label.pack(ipadx=1)
+#         tw.wm_attributes("-topmost", 1)
 
-    def hidetip(self):
-        if self.tipwindow:
-            self.tipwindow.destroy()
-            self.tipwindow = None
-        if self.id:
-            self.widget.after_cancel(self.id)
-            self.id = None
+#     def hidetip(self):
+#         if self.tipwindow:
+#             self.tipwindow.destroy()
+#             self.tipwindow = None
+#         if self.id:
+#             self.widget.after_cancel(self.id)
+#             self.id = None
 
-    def on_destroy(self, event):
-        self.hidetip()
-        if self.bind_id:
-            self.widget.unbind("<Destroy>", self.bind_id)
-            self.bind_id = None
+#     def on_destroy(self, event):
+#         self.hidetip()
+#         if self.bind_id:
+#             self.widget.unbind("<Destroy>", self.bind_id)
+#             self.bind_id = None
 
-    def update_text(self, new_text):
-        self.text = new_text
-        if self.tipwindow:
-            label = self.tipwindow.winfo_children()[0]
-            label.config(text=self.text)
+#     def update_text(self, new_text):
+#         self.text = new_text
+#         if self.tipwindow:
+#             label = self.tipwindow.winfo_children()[0]
+#             label.config(text=self.text)
 
-    def enable(self):
-        self.enabled = True
+#     def enable(self):
+#         self.enabled = True
 
-    def disable(self):
-        self.enabled = False
-        self.hidetip()
+#     def disable(self):
+#         self.enabled = False
+#         self.hidetip()
 
-def createToolTip(widget, text, delay=DEFAULT_TOOLTIP_DELAY):
-    toolTip = ToolTip(widget, text, delay)
+# def createToolTip(widget, text, delay=DEFAULT_TOOLTIP_DELAY):
+#     toolTip = ToolTip(widget, text, delay)
     
-    def enter(event):
-        toolTip.showtip()
+#     def enter(event):
+#         toolTip.showtip()
     
-    def leave(event):
-        toolTip.hidetip()
+#     def leave(event):
+#         toolTip.hidetip()
     
-    widget.bind('<Enter>', enter, add="+")
-    widget.bind('<Leave>', leave, add="+")
+#     widget.bind('<Enter>', enter, add="+")
+#     widget.bind('<Leave>', leave, add="+")
 
-    # Store the tooltip object and related methods as attributes of the widget
-    widget.tooltip = toolTip
-    widget.tt_get_text = lambda: toolTip.text
-    widget.tt_set_text = toolTip.update_text
-    widget.tt_enable = toolTip.enable
-    widget.tt_disable = toolTip.disable
-    widget.tt_enabled = True
-
-
-def createNamedToolTip(widget, text):
-    tooltip = ToolTip(widget, text)
-    widget.bind('<Enter>', lambda event: tooltip.showtip())
-    widget.bind('<Leave>', lambda event: tooltip.hidetip())
-    return tooltip
+#     # Store the tooltip object and related methods as attributes of the widget
+#     widget.tooltip = toolTip
+#     widget.tt_get_text = lambda: toolTip.text
+#     widget.tt_set_text = toolTip.update_text
+#     widget.tt_enable = toolTip.enable
+#     widget.tt_disable = toolTip.disable
+#     widget.tt_enabled = True
 
 
-# Example Usage:
-# screenshot_checkbox = tk.Checkbutton(root, text="Use Screenshot")
-# screenshot_checkbox.pack(side=tk.RIGHT, padx=5)
-# createToolTip(screenshot_checkbox, "Capture the screen when clicking colors")
+# def createNamedToolTip(widget, text):
+#     tooltip = ToolTip(widget, text)
+#     widget.bind('<Enter>', lambda event: tooltip.showtip())
+#     widget.bind('<Leave>', lambda event: tooltip.hidetip())
+#     return tooltip
+
+
+# # Example Usage:
+# # screenshot_checkbox = tk.Checkbutton(root, text="Use Screenshot")
+# # screenshot_checkbox.pack(side=tk.RIGHT, padx=5)
+# # createToolTip(screenshot_checkbox, "Capture the screen when clicking colors")
 
 
 

@@ -21,8 +21,10 @@ import datetime
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import os
+import sys
 
-
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) # path statement so import works
+from utils.ToolTips import createToolTip
 
 # Classtime!
 class BatchWrapper:
@@ -88,7 +90,6 @@ class BatchWrapper:
         # Add validation for timeout_var
         self.timeout_var.trace_add("write", self.validate_timeout)
 
-
         # Add a trace on user var
         self.run_as_user_var.trace_add("write", self.update_preview)
 
@@ -142,6 +143,7 @@ class BatchWrapper:
         # Select Target button
         self.select_target_button = tk.Button(file_label_frame, text="Select Target", command=self.select_target)
         file_label_frame.add(self.select_target_button)
+        createToolTip(self.select_target_button, "Click to select a target file for the batch script")
 
         # Path Display Frame
         self.file_path_display_frame = tk.LabelFrame(file_selection_paned_window, text="Target Path:")
@@ -150,6 +152,8 @@ class BatchWrapper:
         self.file_path_display = tk.Text(self.file_path_display_frame, wrap=tk.WORD, height=3)  # Use Text widget for dynamic wrapping
         self.file_path_display.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         self.file_path_display.config(state=tk.DISABLED)  # Make it read-only
+        createToolTip(self.file_path_display, "Displays the full path of the selected target file")
+
 
 
 
@@ -170,53 +174,79 @@ class BatchWrapper:
         left_frame.pack(side=tk.LEFT, padx=(0, 5), pady=0, fill=tk.BOTH, expand=True)  # Padding between columns
         right_frame.pack(side=tk.RIGHT, padx=(5, 0), pady=0, fill=tk.BOTH, expand=True)
 
-        # THE OPTIONS
+        # Add options to the left frame
         self.add_option(left_frame, "Run as Administrator", self.run_as_admin_var)
+        createToolTip(left_frame.winfo_children()[-1], "Run the script with administrator privileges")
+
         self.add_option(left_frame, "Force New Instance", self.force_new_instance_var)
+        createToolTip(left_frame.winfo_children()[-1], "Force a new instance of the program to run")
+
         self.add_radio_group(left_frame, "Window State:", self.min_max_hidden_var,
                             [("None", "None"), ("Minimized", "Minimized"), ("Maximized", "Maximized"), ("Hidden", "Hidden")])
+        createToolTip(left_frame.winfo_children()[-1], "Set the initial window state of the program")
 
-        # Timeout
         self.add_label(left_frame, "Timeout (seconds):")
-        self.timeout_entry = tk.Entry(left_frame, textvariable=self.timeout_var, width=10)  # edit width of text box HERE
+        self.timeout_entry = tk.Entry(left_frame, textvariable=self.timeout_var, width=10)
         self.timeout_entry.pack(anchor='w', padx=0, pady=0)
+        createToolTip(self.timeout_entry, "Set a timeout for the script execution (in seconds)")
 
-        # Error Handling
+        # Add options to the right frame
         self.add_radio_group(right_frame, "Error Handling:", self.error_handling_var,
                             [("None", "None"), ("Ignore Errors", "Ignore Errors"), ("Pause on Error", "Pause on Error")])
-        self.add_option(right_frame, "Wait for Exit", self.wait_for_exit_var)
-        self.add_option(right_frame, "Log Output", self.log_output_var)
-        self.add_option(right_frame, "Log Errors", self.log_errors_var)
-        self.add_option(right_frame, "Unbuffered Output", self.unbuffered_output_var)
+        createToolTip(right_frame.winfo_children()[-1], "Choose how to handle errors in the script")
 
-        # CPU Priority - This one goes in the options frame
+        self.add_option(right_frame, "Wait for Exit", self.wait_for_exit_var)
+        createToolTip(right_frame.winfo_children()[-1], "Wait for the program to exit before continuing")
+
+        self.add_option(right_frame, "Log Output", self.log_output_var)
+        createToolTip(right_frame.winfo_children()[-1], "Log the program's output to a file")
+
+        self.add_option(right_frame, "Log Errors", self.log_errors_var)
+        createToolTip(right_frame.winfo_children()[-1], "Log any errors to a file")
+
+        self.add_option(right_frame, "Unbuffered Output", self.unbuffered_output_var)
+        createToolTip(right_frame.winfo_children()[-1], "Use unbuffered output for the program")
+
+        # Add CPU Priority dropdown
         self.add_dropdown(options_frame, "CPU Priority", self.priority_var, 
                         ["Realtime", "High", "Above Normal", "Normal (default)", "Below Normal", "Idle"], width=20)
+        createToolTip(options_frame.winfo_children()[-1], "Set the CPU priority for the program")
 
-        # Custom strings
+        # Add custom string entries
         self.add_entry(self.main_frame, "Custom Command String", self.custom_string_var)
+        createToolTip(self.main_frame.winfo_children()[-1], "Add a custom command string to the batch file")
+
         self.add_entry(self.main_frame, "Custom Arguments", self.custom_arguments_var)
+        createToolTip(self.main_frame.winfo_children()[-1], "Add custom arguments to the program execution")
+
         self.add_entry(self.main_frame, "Environment Variables (key=value)", self.env_vars_var)
+        createToolTip(self.main_frame.winfo_children()[-1], "Set environment variables for the program")
+
         self.add_entry(self.main_frame, "Start In Directory", self.start_in_directory_var)
+        createToolTip(self.main_frame.winfo_children()[-1], "Set the starting directory for the program")
 
-        # Run As Another User
+        # Add Run As Another User entry
         self.add_entry(options_frame, "Run As User:", self.run_as_user_var)
-
+        createToolTip(options_frame.winfo_children()[-1], "Run the program as a specific user")
 
 
 
     def setup_preview_and_buttons(self):
+        # Setup the preview section and action buttons
         buttons_frame = tk.Frame(self.main_frame)
         buttons_frame.pack(fill=tk.X, pady=(10, 0))
 
         save_button = tk.Button(buttons_frame, text="Save .bat File", command=self.save_bat_file)
         save_button.pack(side=tk.LEFT, padx=(0, 10))
+        createToolTip(save_button, "Save the generated batch file")
 
         clear_all_button = tk.Button(buttons_frame, text="Clear All", command=self.clear_all)
         clear_all_button.pack(side=tk.LEFT, padx=(0, 10))
+        createToolTip(clear_all_button, "Clear all input fields")
 
         cancel_button = tk.Button(buttons_frame, text="Cancel/Quit", command=self.root.destroy)
         cancel_button.pack(side=tk.LEFT)
+        createToolTip(cancel_button, "Close the BatchWrapper window")
 
         self.string_preview_label = tk.Label(self.main_frame, text="Command Preview:")
         self.string_preview_label.pack(anchor='w', pady=(10, 0))
@@ -224,7 +254,11 @@ class BatchWrapper:
         self.string_preview = tk.Text(self.main_frame, height=5, wrap='word')
         self.string_preview.pack(fill=tk.BOTH, expand=True, pady=(0, 0))
         self.string_preview.config(state=tk.DISABLED)
+        createToolTip(self.string_preview, "Preview of the generated batch command")
 
+
+
+    # Helper methods for UI setup
     def add_option(self, parent, text, variable):
         tk.Checkbutton(parent, text=text, variable=variable, command=self.update_preview).pack(anchor='w')
 
@@ -568,3 +602,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+

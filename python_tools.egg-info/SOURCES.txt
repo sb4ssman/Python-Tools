@@ -2,6 +2,7 @@ README.md
 setup.py
 BatchWrapper/BatchWrapper.py
 BatchWrapper/__init__.py
+BatchWrapper/bw-test.py
 ColorCatcher/ColorCatcher.py
 ColorCatcher/__init__.py
 MouseTracker/DeluxeMouseTracker.py
@@ -17,8 +18,11 @@ Scraps/pythonpixelcoordinates.py
 Scraps/pyvda_test.py
 Scraps/tmb test 18.py
 Scraps/tmb test4.py
+TestApps/TkThemeTest.py
 TestApps/TooltipsTestApp.py
 TestApps/__init__.py
+TestApps/fancybuttonclasstest.py
+TestApps/tmbtestapp.py
 Tools-Lab/__init__.py
 python_tools.egg-info/PKG-INFO
 python_tools.egg-info/SOURCES.txt
@@ -27,10 +31,7 @@ python_tools.egg-info/top_level.txt
 utils/FancyButtonTEST.py
 utils/OffsetCalibrator.py
 utils/TinyCheckbox.py
-utils/TkThemeTest.py
 utils/ToolTips.py
 utils/__init__.py
-utils/fancybuttonclasstest.py
 utils/getmonitorchecker.py
-utils/tmbtestapp.py
 utils/tray_icon_tester.py

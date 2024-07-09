@@ -18,7 +18,7 @@ Created on Wed Jul 16 16:53:43 2024
 
 
 
-
+import sys
 import os
 import re
 import json
@@ -32,12 +32,17 @@ from screeninfo import get_monitors
 from datetime import datetime
 from PIL import ImageGrab, ImageTk, Image, ImageDraw
 
-
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Import utilities from python_tools package
 from utils.ToolTips import createToolTip, createNamedToolTip
 from utils.TinyCheckbox import TinyCheckbox
 from utils.FancyButtonTEST import FancyButton, LIGHT_COLORS, DARK_COLORS
 from utils.OffsetCalibrator import calibrate_offset
+
+
+
+
+
 
 # Get the directory of the app
 app_directory = os.path.dirname(os.path.abspath(__file__))
@@ -117,10 +122,12 @@ class Settings:
             json.dump(self.settings, f)
 
     def get(self, key, default=None):
-        return self.settings["app_settings"].get(key, default)
+        return self.settings.get("app_settings", {}).get(key, default)
 
     def set(self, key, value):
-        self.settings[key] = value
+        if "app_settings" not in self.settings:
+            self.settings["app_settings"] = {}
+        self.settings["app_settings"][key] = value
         self.save_settings()
 
     def is_calibrated(self):
@@ -136,6 +143,13 @@ settings = Settings()
 
 # The pre-app:
 ################
+
+def main():
+    root = tk.Tk()
+    mode = sys.argv[1] if len(sys.argv) > 1 else None
+    app = start_appropriate_tracker(root, mode)
+    root.mainloop()
+    
 def check_settings_exist():
     print("Checking settings.json...")
     if not settings.is_calibrated():
@@ -143,16 +157,26 @@ def check_settings_exist():
         messagebox.showinfo("Calibration Required", "It looks like you haven't calibrated the offset for accurate tracking yet.\nPlease calibrate now.")
 
 
-def start_appropriate_tracker(root):
-    always_advanced = settings.get("app_settings", {}).get("always_advanced", False)
-    print(f"Always Advanced setting: {always_advanced}")  # Debug print
-    if always_advanced:
+def start_appropriate_tracker(root, mode=None):
+
+    print(f"Mouse Mode = {mode}")
+    print("##############################################")
+    
+    if mode == "Simple":
+        print("Starting Simple Mouse Tracker")
+        return SimpleMouseTracker(root)
+    elif mode == "Advanced":
         print("Starting Advanced Mouse Tracker")
         return AdvancedMouseTracker(root)
     else:
-        print("Starting Simple Mouse Tracker")
-        return SimpleMouseTracker(root)
-
+        always_advanced = settings.get("always_advanced", False)
+        print(f"Always Advanced setting: {always_advanced}")
+        if always_advanced:
+            print("Starting Advanced Mouse Tracker")
+            return AdvancedMouseTracker(root)
+        else:
+            print("Starting Simple Mouse Tracker")
+            return SimpleMouseTracker(root)
 
 
 
@@ -586,8 +610,8 @@ class AdvancedMouseTracker:
 ###################################
 
     def toggle_always_advanced(self):
-        settings.set("app_settings", {"always_advanced": self.always_advanced_var.get()})
-        print(settings)
+        settings.set("always_advanced", self.always_advanced_var.get())
+        # print(settings.settings)  # Print the entire settings dictionary for debugging
 
     # Do a calibrate
     def calibrate_offset(self):
@@ -1031,9 +1055,8 @@ class AdvancedMouseTracker:
         settings.save_settings()  # Save settings before closing
         self.root.destroy()
 
-# In your main script:
+
+
+# Tracked you all the way down here
 if __name__ == "__main__":
-    root = tk.Tk()
-    check_settings_exist()
-    app = start_appropriate_tracker(root)
-    root.mainloop()
+    main()

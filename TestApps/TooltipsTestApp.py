@@ -35,12 +35,17 @@ import tkinter as tk
 import sys
 import os
 
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
 # print("Python version:", sys.version)
 # print("Current working directory:", os.getcwd())
 # print("Python path:", sys.path)
 
 # try:
-#     from utils.ToolTips import createToolTip, createNamedToolTip
+#     print("nothing")
+#     #from utils.ToolTips import createToolTip, createNamedToolTip
 # except ImportError as e:
 #     print(f"Failed to import from utils.ToolTips: {e}")
 #     print("Contents of current directory:", os.listdir())
@@ -48,7 +53,7 @@ import os
     
 #     # Try absolute import
 #     try:
-#         from python_tools.utils.ToolTips import createToolTip, createNamedToolTip
+#         # from python_tools.utils.ToolTips import createToolTip, createNamedToolTip
 #         print("Successfully imported using absolute import")
 #     except ImportError as e:
 #         print(f"Failed to import using absolute import: {e}")
