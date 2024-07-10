@@ -34,10 +34,10 @@ from PIL import ImageGrab, ImageTk, Image, ImageDraw
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Import utilities from python_tools package
-from utils.ToolTips import createToolTip, createNamedToolTip
-from utils.TinyCheckbox import TinyCheckbox
-from utils.FancyButtonTEST import FancyButton, LIGHT_COLORS, DARK_COLORS
-from utils.OffsetCalibrator import calibrate_offset
+from ToolTips import createToolTip, createNamedToolTip
+from TinyCheckbox import TinyCheckbox
+from FancyButtonTEST import FancyButton, LIGHT_COLORS, DARK_COLORS
+from OffsetCalibrator import calibrate_offset
 
 
 

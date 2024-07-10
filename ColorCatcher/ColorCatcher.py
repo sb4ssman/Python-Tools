@@ -36,7 +36,7 @@ import time
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) # path statement so import works
 
-from utils.ToolTips import createToolTip, createNamedToolTip
+from ToolTips import createToolTip, createNamedToolTip
 
 
 # # I wanted one tooltip. 

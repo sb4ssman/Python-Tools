@@ -55,14 +55,17 @@ class wdeDeetsTool(tk.Tk):
         self.detect_button = ttk.Button(self, text="Detect Details", command=self.detect_wde_deets)
         self.detect_button.pack(pady=5)
         
-        self.save_button = ttk.Button(self, text="Save Details", command=self.save_deets, state=tk.DISABLED)
-        self.save_button.pack(pady=5)
+        self.save_deets_button = ttk.Button(self, text="Save Details", command=self.save_deets, state=tk.DISABLED)
+        self.save_deets_button.pack(pady=5)
         
         self.map_button = ttk.Button(self, text="Show Map", command=self.show_map, state=tk.DISABLED)
         self.map_button.pack(pady=5)
         
         self.mini_map_button = ttk.Button(self, text="Show Mini-Map", command=self.show_mini_map, state=tk.DISABLED)
         self.mini_map_button.pack(pady=5)
+
+        self.save_map_button = ttk.Button(self, text="Save Map", width=14, command=self.save_map, state=tk.DISABLED)
+        self.save_map_button.pack(pady=(0, 10))
 
         self.desktop_info = None
         self.mini_map_window = None
@@ -73,7 +76,7 @@ class wdeDeetsTool(tk.Tk):
         self.output_text.delete(1.0, tk.END)
         self.output_text.insert(tk.END, json.dumps(self.desktop_info, indent=4))
         
-        self.save_button.config(state=tk.NORMAL)
+        self.save_deets_button.config(state=tk.NORMAL)
         self.map_button.config(state=tk.NORMAL)
         self.mini_map_button.config(state=tk.NORMAL)
 
@@ -107,6 +110,7 @@ class wdeDeetsTool(tk.Tk):
 
         map_image = generate_map(self.desktop_info, **options)
         map_image.show()
+        self.save_map_button.config(state=tk.NORMAL)
 
     def show_mini_map(self):
         """Displays a mini-map with real-time mouse position updates."""
@@ -138,6 +142,21 @@ class wdeDeetsTool(tk.Tk):
                 self.mini_map_window.after(100, lambda: update_mini_map(Image))
 
         update_mini_map(Image)
+
+
+    def save_map(self):
+        if not hasattr(self, 'map_image'):
+            messagebox.showwarning("No Map", "Please generate the map first.")
+            return
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_filename = f"desktop_map_{timestamp}.png"
+        
+        file_path = filedialog.asksaveasfilename(defaultextension=".png", initialfile=default_filename)
+        if file_path:
+            self.map_image.save(file_path)
+            messagebox.showinfo("Saved", f"Desktop map saved to {file_path}")
+        self.save_map_button.config(state=tk.DISABLED)
 
 if __name__ == "__main__":
     app = wdeDeetsTool()
