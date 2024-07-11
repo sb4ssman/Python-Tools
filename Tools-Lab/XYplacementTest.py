@@ -68,6 +68,7 @@ class AdvancedPlacementTool(tk.Tk):
         self.test_windows = []
 
         self.create_gui()
+        # self.clear_monitor_info() # this will populate instructions
         
         self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_change)
 
@@ -98,9 +99,37 @@ class AdvancedPlacementTool(tk.Tk):
         self.monitor_text = tk.Text(self.monitor_frame, wrap=tk.WORD)
         self.monitor_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
-        self.refresh_button = ttk.Button(self.monitor_frame, text="Refresh Monitor Info", command=self.refresh_monitor_info)
-        self.refresh_button.pack(pady=5)
+        button_frame = ttk.Frame(self.monitor_frame)
+        button_frame.pack(pady=5)
 
+        self.refresh_button = ttk.Button(button_frame, text="Refresh Monitor Info", command=self.refresh_monitor_info)
+        self.refresh_button.pack(side=tk.LEFT, padx=5)
+
+        self.clear_button = ttk.Button(button_frame, text="Clear", command=self.clear_monitor_info)
+        self.clear_button.pack(side=tk.LEFT, padx=5)
+
+    def display_instructions(self):
+        instructions = """
+        Application Instructions and Notes:
+
+        1. This application helps test window placement across multiple monitors.
+        2. Use the 'Refresh Monitor Info' button to get the latest monitor configuration.
+        3. The 'Clear' button will reset all fields and display these instructions.
+
+        Window Placement Process:
+        - We use the `os.startfile()` function to launch a test application (Notepad).
+        - Window placement is done using the `pygetwindow` library, which interacts with Windows APIs.
+        - The `window.moveTo(x, y)` function call ultimately uses the Windows SetWindowPos function.
+
+        Coordinate Systems:
+        - The primary monitor's origin pixel (0, 0) is the "true origin" for the user.
+        - Windows may have an offset between its coordinate system and the true origin.
+        - Our goal is to detect this offset and accurately place windows on any monitor.
+        - By comparing requested positions with actual window positions, we can calculate this offset.
+
+        Remember: The Windows offset should be measured relative to the true origin (primary monitor's top-left corner).
+        """
+        self.monitor_text.insert(tk.END, instructions)
 
     def create_map_tab(self):
         # Configure style for black background
@@ -125,6 +154,8 @@ class AdvancedPlacementTool(tk.Tk):
         self.update_map_button.pack()
 
         # Bind events
+        self.map_canvas.bind("<ButtonPress-1>", self.start_pan)
+        self.map_canvas.bind("<B1-Motion>", self.pan)
         self.map_canvas.bind("<Motion>", self.on_mouse_move)
         self.map_canvas.bind("<MouseWheel>", self.zoom_map)
 
@@ -140,6 +171,22 @@ class AdvancedPlacementTool(tk.Tk):
 
         self.calibration_offset_label = ttk.Label(self.calibration_frame, text="Current Offset: Not Calibrated")
         self.calibration_offset_label.pack()
+
+        ttk.Label(self.calibration_frame, text="Manual Offset Entry:").pack(pady=(20, 5))
+        
+        offset_frame = ttk.Frame(self.calibration_frame)
+        offset_frame.pack()
+
+        ttk.Label(offset_frame, text="X:").grid(row=0, column=0, padx=5)
+        self.offset_x_entry = ttk.Entry(offset_frame, width=10)
+        self.offset_x_entry.grid(row=0, column=1, padx=5)
+
+        ttk.Label(offset_frame, text="Y:").grid(row=0, column=2, padx=5)
+        self.offset_y_entry = ttk.Entry(offset_frame, width=10)
+        self.offset_y_entry.grid(row=0, column=3, padx=5)
+
+        self.apply_manual_offset_button = ttk.Button(self.calibration_frame, text="Apply Manual Offset", command=self.apply_manual_offset)
+        self.apply_manual_offset_button.pack(pady=10)
 
 
     def create_test_tab(self):
@@ -186,9 +233,9 @@ class AdvancedPlacementTool(tk.Tk):
 
         self.use_offset_var = tk.BooleanVar(value=False)
         self.use_offset_radio = ttk.Radiobutton(self.test_options_frame, text="Use Raw Coordinates", variable=self.use_offset_var, value=False, command=self.update_calculated_coordinates)
-        self.use_offset_radio.pack(pady=2)
+        self.use_offset_radio.pack(anchor="nw", pady=2)
         self.use_offset_radio_adjusted = ttk.Radiobutton(self.test_options_frame, text="Use Offset-Adjusted Coordinates", variable=self.use_offset_var, value=True, command=self.update_calculated_coordinates)
-        self.use_offset_radio_adjusted.pack(pady=2)
+        self.use_offset_radio_adjusted.pack(anchor="sw", pady=2)
 
         self.test_button = ttk.Button(bottom_frame, text="Run Placement Tests", command=self.run_placement_tests)
         self.test_button.pack(side=tk.LEFT, padx=5)
@@ -224,6 +271,13 @@ class AdvancedPlacementTool(tk.Tk):
             self.is_map_tab_active = False
             self.stop_crosshair_tracking()
 
+    def clear_monitor_info(self):
+        self.monitor_text.delete(1.0, tk.END)
+        self.desktop_info = None
+        self.update_monitor_dropdown()
+        self.display_instructions()
+
+
     def calibrate_offset(self):
         def on_calibrate():
             nonlocal root
@@ -244,6 +298,19 @@ class AdvancedPlacementTool(tk.Tk):
 
         root.mainloop()
         root.destroy()
+
+    def apply_manual_offset(self):
+        try:
+            self.offset_x = int(self.offset_x_entry.get())
+            self.offset_y = int(self.offset_y_entry.get())
+            self.calibration_offset_label.config(text=f"Current Offset: ({self.offset_x}, {self.offset_y})")
+            self.offset_label.config(text=f"Current Offset: ({self.offset_x}, {self.offset_y})")
+        except ValueError:
+            messagebox.showerror("Invalid Input", "Please enter valid integer values for the offset.")
+            
+
+
+        
 
     def get_monitor_info_for_position(self, x, y):
         if not self.desktop_info:
@@ -369,7 +436,7 @@ class AdvancedPlacementTool(tk.Tk):
         zoom_y = canvas_height / self.base_map.height
         self.zoom_level = min(zoom_x, zoom_y, 1.0)
         
-    def display_map(self):
+    def display_map(self, center_x=None, center_y=None):
         if self.base_map:
             zoomed_size = (
                 int(self.base_map.width * self.zoom_level),
@@ -381,6 +448,13 @@ class AdvancedPlacementTool(tk.Tk):
             self.map_photo = ImageTk.PhotoImage(zoomed_map)
             self.map_canvas.delete("all")
             self.map_canvas.create_image(0, 0, anchor="nw", image=self.map_photo)
+
+            if center_x is not None and center_y is not None:
+                self.map_canvas.scan_dragto(
+                    int(center_x * (1 - self.zoom_level)),
+                    int(center_y * (1 - self.zoom_level)),
+                    gain=1
+                )
 
     def on_mouse_move(self, event):
         if self.base_map and self.tracking_active:
@@ -442,14 +516,20 @@ class AdvancedPlacementTool(tk.Tk):
 
     def zoom_map(self, event):
         if self.base_map:
+            x = self.map_canvas.canvasx(event.x)
+            y = self.map_canvas.canvasy(event.y)
             if event.delta > 0:
                 self.zoom_level *= 1.1
             else:
                 self.zoom_level /= 1.1
             self.zoom_level = max(0.1, min(self.zoom_level, 5.0))
-            self.display_map()
+            self.display_map(x, y)
 
+    def start_pan(self, event):
+        self.map_canvas.scan_mark(event.x, event.y)
 
+    def pan(self, event):
+        self.map_canvas.scan_dragto(event.x, event.y, gain=1)
 
 # TEST FUNCTIONS
 #######################
@@ -468,7 +548,7 @@ class AdvancedPlacementTool(tk.Tk):
             monitor = self.desktop_info['monitors'][selected_index]
             use_offset = self.use_offset_var.get()
 
-            window_size = (300, 300)
+            window_size = (self.window_measure, self.window_measure)
             positions = self.calculate_corner_positions(monitor, window_size, use_offset)
 
             for i, (pos, description) in enumerate(positions):
