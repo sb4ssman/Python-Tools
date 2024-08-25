@@ -39,7 +39,7 @@ if __name__ == "__main__":
 
     # Example file paths (replace these with your actual file paths)
     files = [
-        "<path_to_file>"
+        "C:\\Users\\tmill\\Documents\\GitHub\\PythonTools\\Scraps\\scrap.txt0"
 
     ]
 
