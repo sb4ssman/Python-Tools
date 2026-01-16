@@ -1,3 +1,1 @@
-Tools written in python. 
-
-Tools with capitalization in the name have some amount of polish. 
+One-off tool or simple scripts written in python. 

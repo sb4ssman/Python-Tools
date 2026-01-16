@@ -34,6 +34,3 @@ dist/
 .env
 credentials.json
 
-
-# Windopener Specific
-settings.json
