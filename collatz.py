@@ -1,3 +1,20 @@
+# -*- coding: utf-8 -*-
+"""
+collatz.py
+Author : Thomas Miller (sb4ssman)
+Started: 2026-04-16
+
+Interactive explorer for the Collatz conjecture (3n+1 problem).
+Plots one or more sequences simultaneously on a zoomable, log-scale canvas.
+Each run is assigned a perceptually distinct color via golden-ratio HSV spread.
+The legend is interactive — click any entry to show/hide that run.
+A hover databox shows per-step values across all visible runs.
+
+Run standalone:
+    python collatz.py
+"""
+
+import colorsys
 import math
 import sys
 import time
@@ -5,7 +22,12 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import font as tkfont
 
-MULTI_COLORS = ["#4a9eff", "#ff6b6b", "#4ade80", "#ffd700", "#c084fc", "#fb923c"]
+
+def _run_color(idx):
+    """Golden-ratio HSV spread — adjacent indices get maximally different hues."""
+    h = (idx * 0.618033988749895) % 1.0
+    r, g, b = colorsys.hsv_to_rgb(h, 0.72, 0.95)
+    return f"#{int(r * 255):02x}{int(g * 255):02x}{int(b * 255):02x}"
 
 
 def collatz_path(n):
@@ -24,9 +46,6 @@ def build_display_path(path):
 
 
 def path_stats(path):
-    """Return (odd_steps, max_descending_run).
-    Ascending runs are always 1 — 3n+1 is always even so every rise is
-    immediately followed by a halving."""
     odd_steps = sum(1 for v in path[:-1] if v % 2 == 1)
     max_down = cur_down = 0
     for i in range(1, len(path)):
@@ -52,7 +71,7 @@ class CollatzApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Collatz Explorer (3n+1)")
-        self.configure(bg=self.BG)
+        self.configure(bg=self.CANVAS_BG)
         self.resizable(True, True)
 
         self._path         = []
@@ -65,7 +84,9 @@ class CollatzApp(tk.Tk):
         self._zoom         = None
         self._drag_start   = None
         self._drag_rect    = None
-        self._multi_paths  = []   # [(path, dp, ti, color), ...] when multi-view active
+        self._multi_paths  = []
+        self._hidden_runs  = set()   # indices into _multi_paths that are hidden
+        self._legend_items = []      # [(x1,y1,x2,y2,run_idx), ...] for click detection
 
         self._show_dots  = tk.BooleanVar(value=True)
         self._log_scale  = tk.BooleanVar(value=True)
@@ -86,31 +107,63 @@ class CollatzApp(tk.Tk):
     def _build_ui(self):
         sty = ttk.Style(self)
         sty.theme_use("clam")
-        sty.configure(".",              background=self.BG, foreground="#cccccc", font=("Segoe UI", 10))
+        sty.configure(".",              background=self.CANVAS_BG, foreground="#cccccc", font=("Segoe UI", 10))
         sty.configure("TEntry",         fieldbackground="#3c3c3c", foreground="#cccccc", insertcolor="#cccccc")
         sty.configure("TButton",        background="#3c3c3c", foreground="#cccccc", padding=(8, 4))
         sty.map("TButton",              background=[("active", "#505050")])
-        sty.configure("TLabel",         background=self.BG, foreground="#cccccc")
-        sty.configure("TCheckbutton",   background=self.BG, foreground="#cccccc")
+        sty.configure("TLabel",         background=self.CANVAS_BG, foreground="#cccccc")
+        sty.configure("TCheckbutton",   background=self.CANVAS_BG, foreground="#cccccc",
+                                        indicatorcolor="#3c3c3c", indicatorrelief="flat")
+        sty.map("TCheckbutton",         background=[("active", self.CANVAS_BG)],
+                                        foreground=[("active", "#ffffff")],
+                                        indicatorcolor=[("selected", "#4a9eff"),
+                                                        ("active",   "#555555")])
+        sty.configure("TScrollbar",     background="#3c3c3c", troughcolor="#1e1e1e",
+                                        arrowcolor="#888888", borderwidth=0, relief="flat")
+        sty.map("TScrollbar",           background=[("active", "#555555"), ("pressed", "#666666")])
         sty.configure("Accent.TButton", background="#0e639c", foreground="white")
         sty.map("Accent.TButton",       background=[("active", "#1177bb")])
 
-        # ── Single row, 3 columns ──
-        r1 = ttk.Frame(self, padding=(10, 10, 10, 4))
+        r1 = ttk.Frame(self, padding=(8, 6, 8, 0))
         r1.pack(fill="x")
 
-        # ── Column 1: label + text box ──
+        # ── Column 3 packed first so col2 can expand into remaining space ──
+        col3 = ttk.Frame(r1)
+        col3.pack(side="right", anchor="n", padx=(8, 0))
+
+        cb = ttk.Frame(col3)
+        cb.pack(anchor="w")
+        ttk.Checkbutton(cb, text="Points",    variable=self._show_dots,  command=self._redraw).grid(row=0, column=0, sticky="w", padx=(0, 10), pady=1)
+        ttk.Checkbutton(cb, text="Log scale", variable=self._log_scale,  command=self._redraw).grid(row=0, column=1, sticky="w", pady=1)
+        ttk.Checkbutton(cb, text="Databox",   variable=self._databox_on, command=self._redraw).grid(row=1, column=0, sticky="w", padx=(0, 10), pady=1)
+
+        btn_row = ttk.Frame(col3)
+        btn_row.pack(side="bottom", anchor="e")
+        ttk.Button(btn_row, text="Data View", command=self._open_data_view).pack(side="left", padx=(0, 4))
+        self._zoom_btn = ttk.Button(btn_row, text="Zoom out", command=self._zoom_reset, state="disabled")
+        self._zoom_btn.pack(side="left")
+
+        # ── Column 1: label row + text box ──
         col1 = ttk.Frame(r1)
         col1.pack(side="left", anchor="n")
-        ttk.Label(col1, text="Starting numbers:").pack(anchor="w")
+
+        hdr = ttk.Frame(col1)
+        hdr.pack(fill="x")
+        ttk.Label(hdr, text="Starting numbers:").pack(side="left")
+        clear_lbl = tk.Label(hdr, text="Clear", fg="#4a9eff", bg=self.CANVAS_BG,
+                             font=("Segoe UI", 8), cursor="hand2")
+        clear_lbl.pack(side="right")
+        clear_lbl.bind("<Button-1>", lambda _: self._clear_entry())
+        clear_lbl.bind("<Enter>",    lambda _: clear_lbl.config(fg="#7bbfff"))
+        clear_lbl.bind("<Leave>",    lambda _: clear_lbl.config(fg="#4a9eff"))
 
         txt_frame = tk.Frame(col1, bg="#555555", highlightthickness=1,
-                            highlightbackground="#555555")
+                             highlightbackground="#555555")
         txt_frame.pack(anchor="w")
         xscroll = ttk.Scrollbar(txt_frame, orient="horizontal")
         yscroll = ttk.Scrollbar(txt_frame, orient="vertical")
         self._entry = tk.Text(
-            txt_frame, width=24, height=5, wrap="none",
+            txt_frame, width=24, height=3, wrap="none",
             bg="#3c3c3c", fg="#cccccc", insertbackground="#cccccc",
             selectbackground="#0e639c", relief="flat", bd=1,
             font=("Segoe UI", 10),
@@ -126,9 +179,9 @@ class CollatzApp(tk.Tk):
         self._entry.bind("<Control-Return>", lambda _: self._plot())
         self._entry.bind("<KeyRelease>",     self._validate_entry)
 
-        # ── Column 2: buttons / bordered title / stats ──
+        # ── Column 2: buttons / title / stats — expands to fill remaining space ──
         col2 = ttk.Frame(r1)
-        col2.pack(side="left", padx=(10, 0), anchor="n")
+        col2.pack(side="left", padx=(8, 0), anchor="n", fill="x", expand=True)
 
         btn_frame = ttk.Frame(col2)
         btn_frame.pack(anchor="w")
@@ -138,39 +191,29 @@ class CollatzApp(tk.Tk):
         ttk.Button(btn_frame, text="Reset",   command=self._reset).pack(side="left", padx=2)
 
         title_border = tk.Frame(col2, highlightthickness=1,
-                                highlightbackground="#4a9eff", bg=self.BG)
-        title_border.pack(fill="x", pady=(6, 0))
+                                highlightbackground="#4a9eff", bg=self.CANVAS_BG)
+        title_border.pack(fill="x", pady=(4, 0))
         ttk.Label(title_border, text="Collatz Explorer (n = 3n+1|n-odd ; n/2|n-even)",
                   font=("Segoe UI", 11, "bold"), foreground="#4a9eff").pack(padx=6, pady=2)
 
-        bot = ttk.Frame(col2)
-        bot.pack(anchor="w", pady=(4, 0))
-        self._lbl_steps     = ttk.Label(bot, text="Steps: —");      self._lbl_steps.pack(side="left", padx=(0, 12))
-        self._lbl_peak      = ttk.Label(bot, text="Peak: —");       self._lbl_peak.pack(side="left", padx=(0, 12))
-        self._lbl_odd       = ttk.Label(bot, text="Odd steps: —");  self._lbl_odd.pack(side="left", padx=(0, 12))
-        self._lbl_run_down  = ttk.Label(bot, text="↓ run: —");      self._lbl_run_down.pack(side="left", padx=(0, 12))
+        # Stats: row A always visible; row B shows multi-path summary
+        stats_frame = ttk.Frame(col2)
+        stats_frame.pack(anchor="w", pady=(2, 0))
 
-        # ── Column 3: checkboxes top, zoom bottom-right ──
-        col3 = ttk.Frame(r1)
-        col3.pack(side="left", padx=(14, 0), fill="y", anchor="n")
+        row_b = ttk.Frame(stats_frame)
+        row_b.pack(anchor="w")
+        _HINT = "Ctrl+Enter to plot  ·  drag to zoom  ·  click legend to show/hide"
+        self._lbl_multi = ttk.Label(row_b, text=_HINT, foreground="#4a4a4a")
+        self._lbl_multi.pack(side="left")
 
-        cb = ttk.Frame(col3)
-        cb.pack(anchor="w")
-        ttk.Checkbutton(cb, text="Points",    variable=self._show_dots,  command=self._redraw).grid(row=0, column=0, sticky="w", padx=(0, 10), pady=1)
-        ttk.Checkbutton(cb, text="Log scale", variable=self._log_scale,  command=self._redraw).grid(row=0, column=1, sticky="w", pady=1)
-        ttk.Checkbutton(cb, text="Databox",   variable=self._databox_on, command=self._redraw).grid(row=1, column=0, sticky="w", padx=(0, 10), pady=1)
-
-        self._zoom_btn = ttk.Button(col3, text="Zoom out", command=self._zoom_reset, state="disabled")
-        self._zoom_btn.pack(side="bottom", anchor="e")
-
-        # ── Status bar (pack before canvas so it stays at bottom) ──
+        # ── Status bar ──
         sbar = tk.Frame(self, bg="#2a2a2a", height=20)
         sbar.pack(side="bottom", fill="x")
         self._lbl_current = tk.Label(sbar, text="Ready", fg="#888888", bg="#2a2a2a",
                                      font=("Segoe UI", 9), anchor="w")
         self._lbl_current.pack(side="left", padx=(8, 0))
-        self._lbl_memory    = tk.Label(sbar, text="Mem: —", fg="#666666", bg="#2a2a2a",
-                                       font=("Segoe UI", 9))
+        self._lbl_memory = tk.Label(sbar, text="Mem: —", fg="#666666", bg="#2a2a2a",
+                                    font=("Segoe UI", 9))
         self._lbl_memory.pack(side="right", padx=(0, 10))
         self._lbl_calc_time = tk.Label(sbar, text="Calc: —", fg="#666666", bg="#2a2a2a",
                                        font=("Segoe UI", 9))
@@ -178,7 +221,7 @@ class CollatzApp(tk.Tk):
 
         # ── Canvas ──
         self._canvas = tk.Canvas(self, bg=self.CANVAS_BG, highlightthickness=0, width=820, height=420)
-        self._canvas.pack(fill="both", expand=True, padx=10, pady=(0, 4))
+        self._canvas.pack(fill="both", expand=True, padx=8, pady=0)
         self._canvas.bind("<Configure>",       lambda _: self._redraw())
         self._canvas.bind("<Motion>",          self._on_mouse_move)
         self._canvas.bind("<Leave>",           self._on_mouse_leave)
@@ -188,6 +231,9 @@ class CollatzApp(tk.Tk):
         self._canvas.bind("<Double-Button-1>", lambda _: self._zoom_reset())
 
     # ------------------------------------------------------------------ logic
+
+    def _clear_entry(self):
+        self._entry.delete("1.0", "end")
 
     def _get_entry_text(self):
         return self._entry.get("1.0", "end-1c")
@@ -209,7 +255,6 @@ class CollatzApp(tk.Tk):
                     break
 
     def _parse_input(self):
-        """Return first valid positive integer from the text box, or None."""
         for token in self._get_entry_text().replace(",", "\n").splitlines():
             token = token.strip()
             if token:
@@ -223,7 +268,6 @@ class CollatzApp(tk.Tk):
         return None
 
     def _parse_all_inputs(self):
-        """Return list of all valid positive integers from the text box."""
         ns = []
         for token in self._get_entry_text().replace(",", "\n").splitlines():
             token = token.strip()
@@ -238,14 +282,26 @@ class CollatzApp(tk.Tk):
             self._lbl_current.config(text="Enter positive integers, one per line or comma-separated.")
         return ns
 
-    def _update_stats(self, path, calc_ms=None, mem_kb=None):
-        odd, down = path_stats(path)
-        self._lbl_steps.config(text=f"Steps: {len(path) - 1}")
-        self._lbl_peak.config(text=f"Peak: {max(path):,}")
-        self._lbl_odd.config(text=f"Odd steps: {odd}")
-        self._lbl_run_down.config(text=f"↓ run: {down}")
+    def _update_stats(self, calc_ms=None, mem_kb=None):
         self._lbl_calc_time.config(text=f"Calc: {calc_ms:.2f} ms" if calc_ms is not None else "Calc: —")
         self._lbl_memory.config(text=f"Mem: {mem_kb:.1f} KB" if mem_kb is not None else "Mem: —")
+
+    _HINT = "Ctrl+Enter to plot  ·  drag to zoom  ·  click legend to show/hide"
+
+    def _update_multi_label(self):
+        if len(self._multi_paths) <= 1:
+            self._lbl_multi.config(text=self._HINT, foreground="#4a4a4a")
+            return
+        steps_list = [len(p) - 1 for p, _, _, _ in self._multi_paths]
+        peaks_list = [max(p) for p, _, _, _ in self._multi_paths]
+        n_max_s = self._multi_paths[steps_list.index(max(steps_list))][1][0]
+        n_max_p = self._multi_paths[peaks_list.index(max(peaks_list))][1][0]
+        self._lbl_multi.config(
+            foreground="#888888",
+            text=(f"{len(self._multi_paths)} runs  |  "
+                  f"Longest: {max(steps_list)} steps (n={n_max_s:,})  |  "
+                  f"Highest peak: {max(peaks_list):,} (n={n_max_p:,})")
+        )
 
     def _load_path(self, n):
         t0 = time.perf_counter()
@@ -253,18 +309,17 @@ class CollatzApp(tk.Tk):
         calc_ms = (time.perf_counter() - t0) * 1000
         mem_kb = (sys.getsizeof(self._path) + len(self._path) * sys.getsizeof(n)) / 1024
         self._display_path, self._terminal_idx = build_display_path(self._path)
-        self._update_stats(self._path, calc_ms, mem_kb)
+        self._update_stats(calc_ms, mem_kb)
         self._zoom = None
         self._zoom_btn.config(state="disabled")
 
     def _build_multi_paths(self, ns):
-        """Compute all paths, return (multi_paths, calc_ms, mem_kb)."""
         t0 = time.perf_counter()
         result = []
         for i, n in enumerate(ns):
             path = collatz_path(n)
             dp, ti = build_display_path(path)
-            result.append((path, dp, ti, MULTI_COLORS[i % len(MULTI_COLORS)]))
+            result.append((path, dp, ti, _run_color(i)))
         calc_ms = (time.perf_counter() - t0) * 1000
         mem_kb  = sum(sys.getsizeof(p) + len(p) * sys.getsizeof(p[0]) for p, _, _, _ in result) / 1024
         return result, calc_ms, mem_kb
@@ -274,10 +329,12 @@ class CollatzApp(tk.Tk):
         ns = self._parse_all_inputs()
         if not ns:
             return
+        self._hidden_runs = set()
         self._multi_paths, calc_ms, mem_kb = self._build_multi_paths(ns)
         p0, dp0, ti0, _ = self._multi_paths[0]
         self._path, self._display_path, self._terminal_idx = p0, dp0, ti0
-        self._update_stats(p0, calc_ms, mem_kb)
+        self._update_stats(calc_ms, mem_kb)
+        self._update_multi_label()
         self._zoom = None
         self._zoom_btn.config(state="disabled")
         self._anim_index = len(self._display_path)
@@ -289,10 +346,12 @@ class CollatzApp(tk.Tk):
         ns = self._parse_all_inputs()
         if not ns:
             return
+        self._hidden_runs = set()
         self._multi_paths, calc_ms, mem_kb = self._build_multi_paths(ns)
         p0, dp0, ti0, _ = self._multi_paths[0]
         self._path, self._display_path, self._terminal_idx = p0, dp0, ti0
-        self._update_stats(p0, calc_ms, mem_kb)
+        self._update_stats(calc_ms, mem_kb)
+        self._update_multi_label()
         self._zoom = None
         self._zoom_btn.config(state="disabled")
         self._anim_index = 1
@@ -303,10 +362,17 @@ class CollatzApp(tk.Tk):
         max_len = max(len(dp) for _, dp, _, _ in self._multi_paths) if self._multi_paths else len(self._display_path)
         if self._anim_index <= max_len:
             self._redraw(self._anim_index)
-            safe_i = min(self._anim_index - 1, len(self._display_path) - 1)
-            val = self._display_path[safe_i]
-            phase = " [4→2→1 loop]" if self._anim_index > len(self._path) else ""
-            self._lbl_current.config(text=f"Step {self._anim_index}: {val:,}{phase}")
+            step = self._anim_index - 1
+            if len(self._multi_paths) > 1:
+                parts = []
+                for _, dp, _, _ in self._multi_paths:
+                    if step < len(dp):
+                        parts.append(f"{dp[0]:,}→{dp[step]:,}")
+                self._lbl_current.config(text=f"Step {step}:  " + "   ".join(parts))
+            else:
+                val = self._display_path[min(step, len(self._display_path) - 1)]
+                phase = " [4→2→1 loop]" if self._anim_index > len(self._path) else ""
+                self._lbl_current.config(text=f"Step {step}: {val:,}{phase}")
             self._anim_index += 1
             delay = max(18, 900 // max_len)
             self._anim_job = self.after(delay, self._tick_anim)
@@ -333,14 +399,13 @@ class CollatzApp(tk.Tk):
         self._cancel_anim()
         self._path = self._display_path = []
         self._multi_paths = []
+        self._hidden_runs = set()
         self._terminal_idx = self._anim_index = 0
         self._screen_pts = []
         self._zoom = None
         self._zoom_btn.config(state="disabled")
-        for lbl, txt in [(self._lbl_steps, "Steps: —"), (self._lbl_peak, "Peak: —"),
-                         (self._lbl_odd, "Odd steps: —"), (self._lbl_run_down, "↓ run: —"),
-                         (self._lbl_current, "")]:
-            lbl.config(text=txt)
+        self._lbl_current.config(text="")
+        self._lbl_multi.config(text=self._HINT, foreground="#4a4a4a")
         self._canvas.delete("all")
 
     def _cancel_anim(self):
@@ -353,9 +418,78 @@ class CollatzApp(tk.Tk):
         self._zoom_btn.config(state="disabled")
         self._redraw()
 
+    def _toggle_run(self, idx):
+        if idx in self._hidden_runs:
+            self._hidden_runs.discard(idx)
+        else:
+            visible = [i for i in range(len(self._multi_paths)) if i not in self._hidden_runs]
+            if len(visible) <= 1:
+                return
+            self._hidden_runs.add(idx)
+        self._redraw()
+
+    def _open_data_view(self):
+        if not self._multi_paths:
+            self._lbl_current.config(text="No data — plot first.")
+            return
+        win = tk.Toplevel(self)
+        win.title("Data View — Collatz Statistics")
+        win.configure(bg=self.BG)
+        win.geometry("700x340")
+        win.resizable(True, True)
+
+        sty = ttk.Style(win)
+        sty.configure("Dark.Treeview",
+                       background="#2d2d2d", foreground="#cccccc",
+                       fieldbackground="#2d2d2d", rowheight=22)
+        sty.configure("Dark.Treeview.Heading",
+                       background="#3c3c3c", foreground="#cccccc")
+        sty.map("Dark.Treeview", background=[("selected", "#0e639c")])
+
+        cols   = ("n", "steps", "peak", "odd", "down_run", "color_hex")
+        hdrs   = ("Start n", "Steps", "Peak", "Odd Steps", "Max ↓ Run", "Color")
+        widths = (110, 80, 140, 100, 100, 90)
+
+        frame = ttk.Frame(win, padding=10)
+        frame.pack(fill="both", expand=True)
+
+        tree = ttk.Treeview(frame, columns=cols, show="headings", style="Dark.Treeview")
+        for col, hdr, w in zip(cols, hdrs, widths):
+            tree.heading(col, text=hdr)
+            tree.column(col, width=w, anchor="center", stretch=False)
+
+        for i, (path, dp, _, pcolor) in enumerate(self._multi_paths):
+            odd, down = path_stats(path)
+            marker = " (hidden)" if i in self._hidden_runs else ""
+            tree.insert("", "end", values=(
+                f"{dp[0]:,}{marker}", f"{len(path) - 1:,}",
+                f"{max(path):,}", f"{odd:,}", str(down), pcolor,
+            ))
+
+        vsb = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=vsb.set)
+        tree.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
+        frame.rowconfigure(0, weight=1)
+        frame.columnconfigure(0, weight=1)
+
+        if len(self._multi_paths) > 1:
+            all_steps = [len(p) - 1 for p, _, _, _ in self._multi_paths]
+            all_peaks = [max(p) for p, _, _, _ in self._multi_paths]
+            summary = (f"Runs: {len(self._multi_paths)}   "
+                       f"Steps range: {min(all_steps):,}–{max(all_steps):,}   "
+                       f"Peak range: {min(all_peaks):,}–{max(all_peaks):,}")
+            ttk.Label(win, text=summary, foreground="#888888",
+                      background=self.BG).pack(pady=(0, 8))
+
     # ---------------------------------------------------------- zoom drag
 
     def _on_drag_start(self, event):
+        for x1, y1, x2, y2, idx in self._legend_items:
+            if x1 <= event.x <= x2 and y1 <= event.y <= y2:
+                self._toggle_run(idx)
+                self._drag_start = None
+                return
         self._drag_start = (event.x, event.y)
 
     def _on_drag_move(self, event):
@@ -426,13 +560,11 @@ class CollatzApp(tk.Tk):
         c.delete("tooltip")
         if not self._display_path or not self._plot_geom:
             return
-
-        g   = self._plot_geom
+        g      = self._plot_geom
         mx, my = event.x, event.y
-        cw  = c.winfo_width()
-        raw = (mx - g["lp"]) / max(g["pw"], 1) * (g["ie"] - g["is"]) + g["is"]
-        step = max(g["is"], min(g["ie"], round(raw)))
-
+        cw     = c.winfo_width()
+        raw    = (mx - g["lp"]) / max(g["pw"], 1) * (g["ie"] - g["is"]) + g["is"]
+        step   = max(g["is"], min(g["ie"], round(raw)))
         if self._databox_on.get():
             self._draw_databox(c, g, step, cw)
         else:
@@ -479,7 +611,6 @@ class CollatzApp(tk.Tk):
                               fill="#ffffff", font=("Segoe UI", 9), tags="tooltip")
 
     def _draw_databox(self, c, g, step, cw):
-        # Draw the step-snapped vertical line and x-axis label
         snap_x = g["lp"] + (step - g["is"]) / max(g["ie"] - g["is"], 1) * g["pw"]
         c.create_line(snap_x, g["tp"], snap_x, g["ay"],
                       fill="#888888", dash=(3, 4), tags="crosshair")
@@ -491,33 +622,30 @@ class CollatzApp(tk.Tk):
         c.create_text(sx + sw // 2, g["ay"] + 8, text=slbl, anchor="center",
                       fill="#cccccc", font=("Segoe UI", 8), tags="crosshair")
 
-        multi = len(self._multi_paths) > 1
+        visible_paths = [(dp, pcolor) for i, (_, dp, _, pcolor) in enumerate(self._multi_paths)
+                         if i not in self._hidden_runs]
+        multi = len(visible_paths) > 1
         pad, lh = 8, 15
         bx_anchor = g.get("leg_x", g["lp"] + g["pw"])
 
         if multi:
-            # Comparison table: one row per path
             header = f"Step  {step}"
             rows = []
-            for _, dp, _, pcolor in self._multi_paths:
-                n0 = dp[0]
+            for dp, pcolor in visible_paths:
                 if step < len(dp):
-                    v    = dp[step]
-                    prev = dp[step - 1] if step > 0 else None
+                    v     = dp[step]
+                    prev  = dp[step - 1] if step > 0 else None
                     delta = f"  Δ{v - prev:+,}" if prev is not None else ""
-                    parity = "odd" if v % 2 else "even"
-                    rows.append((pcolor, f"{n0:,}", f"{v:,}  {parity}{delta}"))
+                    rows.append((pcolor, f"{dp[0]:,}", f"{v:,}  {'odd' if v % 2 else 'even'}{delta}"))
                 else:
-                    rows.append((pcolor, f"{n0:,}", "— terminated"))
+                    rows.append((pcolor, f"{dp[0]:,}", "— terminated"))
 
-            num_w  = max(self._font9.measure(r[1]) for r in rows)
-            val_w  = max(self._font9.measure(r[2]) for r in rows)
-            hdr_w  = self._font9.measure(header)
-            bw     = max(hdr_w, num_w + val_w + 20) + pad * 2 + 14
-            bh     = lh + 4 + len(rows) * lh + pad * 2
-            bx     = bx_anchor - bw - 10
-            by     = g["tp"] + 10
-
+            num_w = max(self._font9.measure(r[1]) for r in rows)
+            val_w = max(self._font9.measure(r[2]) for r in rows)
+            bw    = max(self._font9.measure(header), num_w + val_w + 20) + pad * 2 + 14
+            bh    = lh + 4 + len(rows) * lh + pad * 2
+            bx    = bx_anchor - bw - 10
+            by    = g.get("leg_y", g["tp"] + 6)
             c.create_rectangle(bx, by, bx + bw, by + bh,
                                fill="#1a1a2e", outline="#556", width=1, tags="crosshair")
             c.create_text(bx + pad, by + pad, text=header, anchor="nw",
@@ -534,11 +662,12 @@ class CollatzApp(tk.Tk):
                               fill="#aaaaaa", font=("Segoe UI", 9), tags="crosshair")
                 ry += lh
         else:
-            if step < 0 or step >= len(self._display_path):
+            dp_vis = visible_paths[0][0] if visible_paths else self._display_path
+            if step < 0 or step >= len(dp_vis):
                 return
-            val  = self._display_path[step]
-            prev = self._display_path[step - 1] if step > 0 else None
-            nxt  = self._display_path[step + 1] if step < len(self._display_path) - 1 else None
+            val  = dp_vis[step]
+            prev = dp_vis[step - 1] if step > 0 else None
+            nxt  = dp_vis[step + 1] if step < len(dp_vis) - 1 else None
             delta = f"  Δ {val - prev:+,}" if prev is not None else ""
             lines = [
                 f"Step  {step}",
@@ -547,10 +676,10 @@ class CollatzApp(tk.Tk):
             ]
             if nxt is not None:
                 lines.append(f"Next   {nxt:,}")
-            bw  = max(self._font9.measure(ln) for ln in lines) + pad * 2
-            bh  = len(lines) * lh + pad * 2
-            bx  = bx_anchor - bw - 10
-            by  = g["tp"] + 10
+            bw = max(self._font9.measure(ln) for ln in lines) + pad * 2
+            bh = len(lines) * lh + pad * 2
+            bx = bx_anchor - bw - 10
+            by = g.get("leg_y", g["tp"] + 6)
             c.create_rectangle(bx, by, bx + bw, by + bh,
                                fill="#1a1a2e", outline="#556", width=1, tags="crosshair")
             for k, ln in enumerate(lines):
@@ -568,30 +697,33 @@ class CollatzApp(tk.Tk):
             return
         c = self._canvas
         c.delete("all")
-        self._screen_pts = []
+        self._screen_pts  = []
+        self._legend_items = []
 
         cw, ch = c.winfo_width(), c.winfo_height()
         if cw < 20 or ch < 20:
             return
 
-        # Build render list
         multi  = len(self._multi_paths) > 1
         render = self._multi_paths if self._multi_paths else \
                  [(self._path, self._display_path, self._terminal_idx, self.LINE_COLOR)]
 
-        max_dp_len = max(len(dp) for _, dp, _, _ in render)
+        visible = [(i, path, dp, ti, col) for i, (path, dp, ti, col) in enumerate(render)
+                   if i not in self._hidden_runs]
+        if not visible:
+            return
+
+        max_dp_len = max(len(dp) for _, _, dp, _, _ in visible)
         count = visible_count if visible_count is not None else max_dp_len
         zoom  = self._zoom
         log   = self._log_scale.get()
-        max_v = max(max(dp) for _, dp, _, _ in render)
+        max_v = max(max(dp) for _, _, dp, _, _ in visible)
 
-        # Index range
         i_s = max(0, zoom["x0"]) if zoom else 0
         i_e = min(count - 1, zoom["x1"]) if zoom else count - 1
         if i_e < i_s:
             return
 
-        # Y range — log always uses full decades
         log_dec = math.ceil(math.log10(max(max_v, 2))) if log else 1
         if log:
             y0, y1 = 1, 10 ** log_dec
@@ -602,7 +734,6 @@ class CollatzApp(tk.Tk):
 
         ly0, ly1 = 0.0, float(log_dec)
 
-        # Padding — left pad from actual font width of widest y label
         lp = self._font.measure(f"{int(y1):,}") + 16
         rp, tp, bp = 16, 16, 28
         pw = max(cw - lp - rp, 1)
@@ -617,27 +748,26 @@ class CollatzApp(tk.Tk):
                 frac = (v - y0) / max(y1 - y0, 1)
             return px, tp + (1 - frac) * ph
 
-        # Cache screen coords for primary path (mouse hover)
-        for i in range(i_s, min(count, len(self._display_path))):
-            v = self._display_path[i]
+        # Cache screen coords for primary (first visible) path
+        primary_dp = visible[0][2]
+        for i in range(i_s, min(count, len(primary_dp))):
+            v = primary_dp[i]
             self._screen_pts.append((*to_xy(i, v), i, v))
 
         self._plot_geom = dict(
             lp=lp, tp=tp, pw=pw, ph=ph, ay=ay,
-            ie=i_e, log=log, log_dec=log_dec,
+            ie=i_e, is_=i_s, log=log, log_dec=log_dec,
             ly0=ly0, ly1=ly1, y0=y0, y1=y1,
         )
         self._plot_geom["is"] = i_s
 
         # ── Y-axis grid ──
         if log:
-            # Minor lines (2–9) within each decade
             for e in range(0, log_dec):
                 for m in range(2, 10):
                     _, gy = to_xy(0, m * 10 ** e)
                     if tp - 2 <= gy <= ay + 2:
                         c.create_line(lp, gy, lp + pw, gy, fill=self.GRID_MINOR, dash=(2, 8))
-            # Major decade lines at 10^0, 10^1, …, 10^log_dec
             for e in range(0, log_dec + 1):
                 v = 10 ** e
                 _, gy = to_xy(0, v)
@@ -670,78 +800,88 @@ class CollatzApp(tk.Tk):
                           fill="#666666", font=("Segoe UI", 8))
 
         # ── Path rendering ──
-        for _, dp, ti_split, pcolor in render:
+        for run_idx, _, dp, ti_split, pcolor in visible:
             p_i_e = min(i_e, len(dp) - 1)
             if p_i_e < i_s:
                 continue
 
             if multi:
-                # Multi-view: single colour throughout, no terminal split
                 pts = [c_ for i in range(i_s, p_i_e + 1) for c_ in to_xy(i, dp[i])]
                 if len(pts) >= 4:
                     c.create_line(*pts, fill=pcolor, width=2)
             else:
-                # Single path: blue main + gold terminal
                 main_end   = min(ti_split, p_i_e)
                 term_start = max(ti_split, i_s)
-
                 if i_s < main_end + 1:
                     pts = [c_ for i in range(i_s, main_end + 1) for c_ in to_xy(i, dp[i])]
                     if len(pts) >= 4:
                         c.create_line(*pts, fill=pcolor, width=2)
-
                 if term_start <= p_i_e:
                     seg_s = max(i_s, term_start - 1)
                     pts = [c_ for i in range(seg_s, p_i_e + 1) for c_ in to_xy(i, dp[i])]
                     if len(pts) >= 4:
                         c.create_line(*pts, fill=self.TERMINAL_COLOR, width=2)
 
-            # Dots
             if self._show_dots.get():
                 r = 3 if x_span <= 80 else 2
                 for i in range(i_s, p_i_e + 1):
                     px_, py_ = to_xy(i, dp[i])
-                    if multi:
-                        dot_col = pcolor
-                    else:
-                        dot_col = self.TERMINAL_DOT if i >= ti_split else self.DOT_COLOR
+                    dot_col = pcolor if multi else (self.TERMINAL_DOT if i >= ti_split else self.DOT_COLOR)
                     c.create_oval(px_ - r, py_ - r, px_ + r, py_ + r, fill=dot_col, outline="")
 
-            # Start label
             if i_s == 0:
                 sx_, sy_ = to_xy(0, dp[0])
                 c.create_text(sx_, sy_ - 10, text=str(dp[0]),
-                              fill="#aaaaaa", font=("Segoe UI", 8))
+                              fill="#ffffff", font=("Segoe UI", 8))
 
-            # Terminal entry marker (single-path mode only)
             if not multi and i_s <= ti_split <= p_i_e:
                 tx_, ty_ = to_xy(ti_split, dp[ti_split])
                 c.create_line(tx_, ty_, tx_, ay, fill=self.TERMINAL_COLOR, dash=(4, 4), width=1)
                 c.create_oval(tx_ - 5, ty_ - 5, tx_ + 5, ty_ + 5,
                               fill=self.TERMINAL_COLOR, outline="#ffffff", width=1)
                 anchor = "sw" if tx_ > lp + pw * 0.7 else "s"
-                c.create_text(tx_, ty_ - 14,
-                              text=f"enters 4→2→1  (step {ti_split})",
+                c.create_text(tx_, ty_ - 14, text=f"enters 4→2→1  (step {ti_split})",
                               fill=self.TERMINAL_COLOR, font=("Segoe UI", 8), anchor=anchor)
 
-        # Multi-view legend — top-right; store left edge for databox positioning
-        if multi:
-            leg_texts  = [str(dp[0]) for _, dp, _, _ in render]
-            leg_tw     = max(self._font.measure(t) for t in leg_texts)
-            leg_w      = 12 + 6 + leg_tw + 10
-            leg_h      = len(render) * 14 + 6
-            leg_left   = lp + pw - leg_w - 6
+        # ── Legend (always shown when there is at least one path) ──
+        if render:
+            all_texts  = [str(dp[0]) for _, dp, _, _ in render]
+            item_tw    = max(self._font.measure(t) for t in all_texts)
+            # legend wide enough for entries AND the "Viewing:" header
+            leg_w      = max(12 + 6 + item_tw + 18,
+                             self._font.measure("Viewing:") + 14)
+            pad_l      = 6
+            title_h    = 14
+            item_h     = 16
+            leg_h      = pad_l + title_h + 3 + len(render) * item_h + pad_l
+            box_y      = tp + 6                          # aligned with databox
+            # anchor from canvas right edge so it never drifts off-screen
+            leg_left   = cw - leg_w - rp - 4
             self._plot_geom["leg_x"] = leg_left
-            ly = tp + 6
-            c.create_rectangle(leg_left - 4, ly - 2, leg_left + leg_w, ly + leg_h,
+            self._plot_geom["leg_y"] = box_y
+
+            c.create_rectangle(leg_left - 4, box_y, leg_left + leg_w, box_y + leg_h,
                                fill="#1a1a2e", outline="#444", width=1)
-            for _, dp, _, pcolor in render:
-                c.create_rectangle(leg_left, ly + 2, leg_left + 12, ly + 12, fill=pcolor, outline="")
-                c.create_text(leg_left + 18, ly + 7, text=str(dp[0]), anchor="w",
-                              fill="#cccccc", font=("Segoe UI", 8))
-                ly += 14
+            c.create_text(leg_left, box_y + pad_l, text="Viewing:", anchor="nw",
+                          fill="#888888", font=("Segoe UI", 8, "italic"))
+            sep_y = box_y + pad_l + title_h
+            c.create_line(leg_left - 4, sep_y, leg_left + leg_w, sep_y, fill="#334")
+            ly = sep_y + 3
+
+            for run_idx, (_, dp, _, pcolor) in enumerate(render):
+                hidden     = run_idx in self._hidden_runs
+                sw_color   = "#444444" if hidden else pcolor
+                text_color = "#555555" if hidden else "#cccccc"
+                label      = str(dp[0]) + (" ○" if hidden else "")
+                c.create_rectangle(leg_left, ly + 3, leg_left + 12, ly + 13,
+                                   fill=sw_color, outline="")
+                c.create_text(leg_left + 18, ly + 8, text=label, anchor="w",
+                              fill=text_color, font=("Segoe UI", 8))
+                self._legend_items.append((leg_left - 4, ly, leg_left + leg_w, ly + item_h, run_idx))
+                ly += item_h
         else:
-            self._plot_geom["leg_x"] = lp + pw  # no legend: right edge
+            self._plot_geom["leg_x"] = cw - rp
+            self._plot_geom["leg_y"] = tp + 6
 
 
 if __name__ == "__main__":

@@ -1,8 +1,24 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Jul 9 16:35:11 2024
+PixelViewer.py
+Author : Thomas Miller (sb4ssman)
+Started: 2024-07-09 16:35
 
-@author: Thomas
+A tkinter widget that renders a magnified, real-time view of the screen
+centered on a configurable target point.  Supports integer zoom (1×–32×),
+multiple crosshair styles, optional color inversion under the crosshair,
+checkerboard background textures, and an event-callback hook for downstream
+consumers.  Designed to be embedded in any tk.Frame.
+
+Quick start
+-----------
+    from PixelViewer import PixelViewer
+    import tkinter as tk
+
+    root = tk.Tk()
+    pv = PixelViewer(root)
+    pv.start_viewer()
+    root.mainloop()
 """
 
 VERSION = "0.1.0"
