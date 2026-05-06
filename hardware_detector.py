@@ -44,7 +44,7 @@ import threading
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 
 class HardwareDetector:
@@ -203,7 +203,7 @@ class HardwareDetector:
         )
         return {"primary": primary, "all": gpus}
 
-    def _make_gpu(self, name: str, vram_gb=None, unified=False) -> Dict:
+    def _make_gpu(self, name: str, vram_gb: Optional[float] = None, unified: bool = False) -> Dict[str, Any]:
         low = name.lower()
         if "nvidia" in low:
             vendor, cuda_capable, role = "NVIDIA", True, "discrete"
@@ -223,7 +223,7 @@ class HardwareDetector:
             "cuda_device_index": None, "unified_memory": unified,
         }
 
-    def _gpu_windows(self) -> List[Dict]:
+    def _gpu_windows(self) -> List[Dict[str, Any]]:
         gpus = []
         # Include resolution fields so we know which controller has a display attached
         result = self._ps(
@@ -239,7 +239,7 @@ class HardwareDetector:
                     continue
                 vram_bytes = entry.get("AdapterRAM")
                 # AdapterRAM is a 32-bit WMI field — caps at ~4 GB; nvidia-smi corrects it below
-                vram_gb = round(vram_bytes / 1024**3, 2) if vram_bytes else None
+                vram_gb = round(float(vram_bytes) / 1024**3, 2) if vram_bytes else None
                 gpu = self._make_gpu(name, vram_gb)
                 w = entry.get("CurrentHorizontalResolution")
                 h = entry.get("CurrentVerticalResolution")
@@ -250,7 +250,7 @@ class HardwareDetector:
         self._enrich_nvidia(gpus)
         return gpus
 
-    def _gpu_macos(self) -> List[Dict]:
+    def _gpu_macos(self) -> List[Dict[str, Any]]:
         gpus = []
         result = self._run(["system_profiler", "SPDisplaysDataType", "-json"])
         if result:
@@ -279,7 +279,7 @@ class HardwareDetector:
                 gpus.append(self._make_gpu("Apple Silicon", unified=True))
         return gpus
 
-    def _gpu_linux(self) -> List[Dict]:
+    def _gpu_linux(self) -> List[Dict[str, Any]]:
         gpus = []
         self._enrich_nvidia(gpus)
         if not gpus:
@@ -292,7 +292,7 @@ class HardwareDetector:
                         gpus.append(self._make_gpu(desc))
         return gpus
 
-    def _enrich_nvidia(self, gpus: List[Dict]):
+    def _enrich_nvidia(self, gpus: List[Dict[str, Any]]):
         """Overlay accurate VRAM, CUDA device index, compute capability, and driver via nvidia-smi."""
         smi = self._run([
             "nvidia-smi",
@@ -302,6 +302,7 @@ class HardwareDetector:
         if not smi:
             return
         cuda_version = self._nvidia_cuda_version()
+        already_enriched: set[int] = set()
         for line in smi.strip().splitlines():
             parts = [p.strip() for p in line.split(", ")]
             if len(parts) < 3:
@@ -319,9 +320,14 @@ class HardwareDetector:
             compute_cap = parts[3] if len(parts) > 3 else None
             driver_ver = parts[4] if len(parts) > 4 else None
 
-            existing = next((g for g in gpus if g["vendor"] == "NVIDIA" and smi_name in g["name"]), None)
-            if existing:
-                existing.update({
+            match_idx = next(
+                (i for i, g in enumerate(gpus)
+                 if i not in already_enriched and g["vendor"] == "NVIDIA" and smi_name in g["name"]),
+                None,
+            )
+            if match_idx is not None:
+                already_enriched.add(match_idx)
+                gpus[match_idx].update({
                     "vram_gb": vram_gb, "cuda_device_index": cuda_idx,
                     "compute_capability": compute_cap, "cuda_version": cuda_version,
                     "driver_version": driver_ver,
@@ -483,7 +489,7 @@ class HardwareDetector:
 
     # ── Displays ─────────────────────────────────────────────────────────────
 
-    def _detect_displays(self) -> List[Dict]:
+    def _detect_displays(self) -> List[Dict[str, Any]]:
         displays = []
         try:
             if self._os == "Windows":
@@ -606,7 +612,7 @@ class HardwareDetector:
 
     # ── Network ───────────────────────────────────────────────────────────────
 
-    def _detect_network(self) -> List[Dict]:
+    def _detect_network(self) -> List[Dict[str, Any]]:
         adapters = []
         try:
             if self._os == "Windows":
@@ -664,7 +670,7 @@ class HardwareDetector:
 
     # ── Audio ─────────────────────────────────────────────────────────────────
 
-    def _detect_audio(self) -> List[Dict]:
+    def _detect_audio(self) -> List[Dict[str, Any]]:
         devices = []
         try:
             if self._os == "Windows":
@@ -1035,7 +1041,7 @@ class HardwareDetector:
         raw = _buf[0]
         return raw.decode("utf-8", errors="replace") if raw and raw.strip() else None
 
-    def _ps(self, cmd: str, timeout: int = 15):
+    def _ps(self, cmd: str, timeout: int = 15) -> Any:
         # -NoProfile skips loading the user profile, saving ~0.5-1s per call
         raw = self._run(["powershell", "-NoProfile", "-Command", cmd], timeout=timeout)
         if raw:
