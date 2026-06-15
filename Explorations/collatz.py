@@ -756,7 +756,7 @@ class CollatzApp(tk.Tk):
 
         self._plot_geom = dict(
             lp=lp, tp=tp, pw=pw, ph=ph, ay=ay,
-            ie=i_e, is_=i_s, log=log, log_dec=log_dec,
+            ie=i_e, log=log, log_dec=log_dec,
             ly0=ly0, ly1=ly1, y0=y0, y1=y1,
         )
         self._plot_geom["is"] = i_s
