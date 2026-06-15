@@ -20,6 +20,7 @@ env/
 # Logs and databases
 *.log
 *.sqlite
+_claude_outputs/
 
 # OS files
 .DS_Store

@@ -1,7 +1,0 @@
-[project]
-name = "python-tools"
-version = "0.1.0"
-description = "Public drawer of small Python tools, diagnostics, and experiments"
-requires-python = ">=3.11"
-
-dependencies = []

@@ -30,8 +30,8 @@ python LLM_Tools\generate_folder_structure.py --path T:\Github\MyProject
 python LLM_Tools\generate_folder_structure.py --org
 ```
 
-The current map for this repository is written to
-`_claude_outputs/folder_structure.md`.
+Generated maps are written to `_claude_outputs/folder_structure.md`, which is
+kept local and ignored by Git.
 
 ### `hardware_detector.py`
 
@@ -116,7 +116,7 @@ script. Treat each folder as a small tool area:
   benchmark runs.
 - `Scraps` contains mixed experiments with mixed dependencies.
 
-For this reason, `requirements.txt` is intentionally empty for now.
+For this reason, this repo does not currently ship one root dependency file.
 
 ---
 
@@ -128,7 +128,7 @@ Regenerate the repository map with:
 python LLM_Tools\generate_folder_structure.py --path T:\Github\sb4ssman\PythonTools
 ```
 
-Output:
+Local output:
 
 ```text
 _claude_outputs\folder_structure.md
