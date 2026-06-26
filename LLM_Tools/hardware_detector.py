@@ -1,41 +1,45 @@
 """
-Hardware Detection Utility
-Author:  sb4ssman
-Created: 2026-03-21 13:11
+LLM_Tools hardware detector.
 
-Detects system hardware and formats output for three audiences.
-Drop this file into any project — no external dependencies required
-(psutil is used automatically if installed, improving RAM detection).
+What it does
+  Collects a point-in-time hardware inventory and formats it for three common
+  audiences: a readable terminal report, compact JSON for LLM context, and full
+  JSON for debugging or archival snapshots. It is useful when choosing local
+  inference models, checking GPU/VRAM availability, or giving an agent enough
+  machine context to make sane tool recommendations.
 
-Supported platforms
-  Windows   PowerShell / WMI / nvidia-smi
-  macOS     sysctl / system_profiler / nvidia-smi
-  Linux     /proc / /sys / nvidia-smi / lspci / lshw
+Platform support
+  Windows   PowerShell/WMI, nvidia-smi, optional psutil
+  macOS     sysctl, system_profiler, nvidia-smi, optional psutil
+  Linux     /proc, /sys, nvidia-smi, lspci/lshw/lsusb, optional psutil
 
-Output modes
-  --mode standard   Human-readable summary printed to stdout (default)
-  --mode llm        Compact JSON trimmed for token efficiency; pipe to an LLM
-                    or read from a tool call to inform model-selection logic
-  --mode verbose    Full JSON with every detected field; useful for debugging
-                    or saving a complete snapshot with --save
+Dependencies
+  No required third-party package. If psutil is installed, RAM detection is
+  more reliable. Optional system tools enrich results when present; missing
+  tools are tolerated and simply leave those fields empty.
 
 Usage
-  python hardware_detector.py                        # standard summary
-  python hardware_detector.py --mode llm             # compact JSON for LLMs
-  python hardware_detector.py --mode verbose         # full JSON dump
-  python hardware_detector.py --mode verbose --save  # dump + save to settings
+  python LLM_Tools/hardware_detector.py
+  python LLM_Tools/hardware_detector.py --mode llm
+  python LLM_Tools/hardware_detector.py --mode verbose
+  python LLM_Tools/hardware_detector.py --mode verbose --save
 
-  # From another script:
+Import API
   from hardware_detector import HardwareDetector
   det = HardwareDetector()
-  data = det.detect()                    # full dict, always
-  print(det.format(data, "standard"))   # human-readable
-  print(det.format(data, "llm"))        # compact dict
-  print(det.format(data, "verbose"))    # same as data
+  data = det.detect()
+  print(det.format(data, "standard"))
+  print(det.format(data, "llm"))
+
+Persistence
+  --save writes to LLM_Tools/Data/settings.json by default, independent of the
+  current working directory. Pass HardwareDetector(settings_path=...) or
+  detect_and_save_hardware(settings_path=...) to use another file.
 """
 
 import argparse
 import json
+import os
 import platform
 import re
 import shutil
@@ -47,10 +51,14 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 
+def _default_settings_path() -> Path:
+    return Path(__file__).resolve().parent / "Data" / "settings.json"
+
+
 class HardwareDetector:
 
-    def __init__(self, settings_path: str = "Data/settings.json"):
-        self.settings_path = Path(settings_path)
+    def __init__(self, settings_path: Optional[Union[str, Path]] = None):
+        self.settings_path = Path(settings_path) if settings_path is not None else _default_settings_path()
         self.settings_path.parent.mkdir(parents=True, exist_ok=True)
         self._os = platform.system()
 
@@ -116,6 +124,15 @@ class HardwareDetector:
                 self._cpu_linux(info)
         except Exception:
             pass
+        if info["name"] == "Unknown":
+            info["name"] = (
+                os.environ.get("PROCESSOR_IDENTIFIER")
+                or platform.processor()
+                or platform.machine()
+                or "Unknown"
+            )
+        if info["threads"] == 0:
+            info["threads"] = os.cpu_count() or 0
         return info
 
     def _cpu_windows(self, info: Dict):
@@ -371,6 +388,8 @@ class HardwareDetector:
                     data = result[0] if isinstance(result, list) else result
                     info["total_gb"] = round(data.get("TotalVisibleMemorySize", 0) / 1024**2, 2)
                     info["available_gb"] = round(data.get("FreePhysicalMemory", 0) / 1024**2, 2)
+                if info["total_gb"] == 0:
+                    self._ram_windows_ctypes(info)
             elif self._os == "Darwin":
                 mem = self._sysctl("hw.memsize")
                 if mem:
@@ -384,6 +403,32 @@ class HardwareDetector:
         except Exception:
             pass
         return info
+
+    def _ram_windows_ctypes(self, info: Dict):
+        """Fallback when WMI/CIM is unavailable but Win32 APIs are accessible."""
+        try:
+            import ctypes
+
+            class MEMORYSTATUSEX(ctypes.Structure):
+                _fields_ = [
+                    ("dwLength", ctypes.c_ulong),
+                    ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", ctypes.c_ulonglong),
+                    ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong),
+                    ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong),
+                    ("ullAvailVirtual", ctypes.c_ulonglong),
+                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+                ]
+
+            stat = MEMORYSTATUSEX()
+            stat.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
+                info["total_gb"] = round(stat.ullTotalPhys / 1024**3, 2)
+                info["available_gb"] = round(stat.ullAvailPhys / 1024**3, 2)
+        except Exception:
+            pass
 
     # ── Storage ───────────────────────────────────────────────────────────────
 
@@ -883,10 +928,13 @@ class HardwareDetector:
         if battery:
             battery_out = {"charge_pct": battery.get("charge_pct"), "status": battery.get("status")}
 
+        cpu_out = {"name": cpu.get("name"), "threads": cpu.get("threads"), "avx": avx}
+        if cpu.get("cores"):
+            cpu_out["cores"] = cpu.get("cores")
+
         out = {
             "platform": f"{plat.get('os')} {plat.get('machine')}",
-            "cpu": {"name": cpu.get("name"), "cores": cpu.get("cores"),
-                    "threads": cpu.get("threads"), "avx": avx},
+            "cpu": cpu_out,
             "ram_gb": ram.get("total_gb"),
             "ram_free_gb": ram.get("available_gb"),
             "gpus": gpus_out,
@@ -919,8 +967,11 @@ class HardwareDetector:
         cpu = data.get("cpu", {})
         avx = " + ".join(k.upper().replace("AVX", "AVX-") for k in ("avx2", "avx512") if cpu.get(k))
         row("CPU", cpu.get("name", "Unknown"))
-        row("", f"{cpu.get('cores')} cores / {cpu.get('threads')} threads"
-            + (f"  ·  {avx}" if avx else ""))
+        if cpu.get("cores"):
+            cpu_topology = f"{cpu.get('cores')} cores / {cpu.get('threads')} threads"
+        else:
+            cpu_topology = f"{cpu.get('threads')} logical threads"
+        row("", cpu_topology + (f"  ·  {avx}" if avx else ""))
 
         ram = data.get("ram", {})
         row("RAM", f"{ram.get('total_gb')} GB total  /  {ram.get('available_gb')} GB available")
@@ -1043,12 +1094,13 @@ class HardwareDetector:
 
     def _ps(self, cmd: str, timeout: int = 15) -> Any:
         # -NoProfile skips loading the user profile, saving ~0.5-1s per call
-        raw = self._run(["powershell", "-NoProfile", "-Command", cmd], timeout=timeout)
-        if raw:
-            try:
-                return json.loads(raw)
-            except json.JSONDecodeError:
-                pass
+        for ps_exe in ("pwsh", "powershell"):
+            raw = self._run([ps_exe, "-NoProfile", "-Command", cmd], timeout=timeout)
+            if raw:
+                try:
+                    return json.loads(raw)
+                except json.JSONDecodeError:
+                    pass
         return None
 
     def _sysctl(self, key: str) -> Optional[str]:
@@ -1079,7 +1131,7 @@ class HardwareDetector:
         return None
 
 
-def detect_and_save_hardware(settings_path: str = "Data/settings.json") -> Dict:
+def detect_and_save_hardware(settings_path: Optional[Union[str, Path]] = None) -> Dict:
     detector = HardwareDetector(settings_path)
     hardware = detector.detect()
     detector.save_to_settings(hardware)
@@ -1094,7 +1146,7 @@ if __name__ == "__main__":
         "--mode", choices=["verbose", "standard", "llm"], default="standard",
         help="verbose: full JSON | standard: human-readable text | llm: compact JSON"
     )
-    parser.add_argument("--save", action="store_true", help="Save to Data/settings.json")
+    parser.add_argument("--save", action="store_true", help="Save to LLM_Tools/Data/settings.json")
     args = parser.parse_args()
 
     detector = HardwareDetector()

@@ -18,6 +18,8 @@ Some tools that started here have graduated:
 ## LLM_Tools
 
 Utilities for local LLM work, hardware context, and agent-friendly reporting.
+These scripts are intentionally small and can be run directly with Python; each
+file also has a top-of-file usage note for agents and humans reading the source.
 
 ### `generate_folder_structure.py`
 
@@ -25,27 +27,32 @@ Generates a Markdown folder tree for a target project. Excludes common
 development artifacts such as `.git`, `.venv`, `__pycache__`, and build
 outputs.
 
-```powershell
-python LLM_Tools\generate_folder_structure.py --path T:\Github\MyProject
-python LLM_Tools\generate_folder_structure.py --org
+```sh
+python LLM_Tools/generate_folder_structure.py
+python LLM_Tools/generate_folder_structure.py --path /path/to/project
+python LLM_Tools/generate_folder_structure.py --org
+python LLM_Tools/generate_folder_structure.py --path /path/to/project --out map.md
 ```
 
-Generated maps are written to `_claude_outputs/folder_structure.md`, which is
-kept local and ignored by Git.
+Generated maps are written to `LLM_Tools/Data/folder_structure.md` by default.
+Use `--out` to place the map somewhere else. The tool no longer depends on a
+Claude-specific notes folder.
 
 ### `hardware_detector.py`
 
 Detects hardware and formats output for humans, compact LLM context, or verbose
 debugging.
 
-```powershell
-python LLM_Tools\hardware_detector.py
-python LLM_Tools\hardware_detector.py --mode llm
-python LLM_Tools\hardware_detector.py --mode verbose --save
+```sh
+python LLM_Tools/hardware_detector.py
+python LLM_Tools/hardware_detector.py --mode llm
+python LLM_Tools/hardware_detector.py --mode verbose --save
 ```
 
 No required third-party dependency. Uses `psutil` opportunistically if it is
-installed.
+installed. Supports Windows, macOS, and Linux with platform-specific probes;
+missing optional tools simply leave some fields empty. `--save` writes to
+`LLM_Tools/Data/settings.json` by default.
 
 ### `sensor_monitor.py`
 
@@ -53,23 +60,27 @@ Reads live hardware sensor data from existing monitor streams when available:
 HWiNFO64 shared memory, MSI Afterburner shared memory, LibreHardwareMonitor or
 OpenHardwareMonitor WMI, `nvidia-smi`, and Windows thermal fallbacks.
 
-```powershell
-python LLM_Tools\sensor_monitor.py
-python LLM_Tools\sensor_monitor.py --mode llm
-python LLM_Tools\sensor_monitor.py --stream --out sensors.jsonl
+```sh
+python LLM_Tools/sensor_monitor.py
+python LLM_Tools/sensor_monitor.py --sources
+python LLM_Tools/sensor_monitor.py --mode llm
+python LLM_Tools/sensor_monitor.py --stream --out sensors.jsonl
 ```
 
-Standard-library Python. Best results require one of the external sensor tools
-above to already be running.
+Standard-library Python. Best results are currently Windows-first because the
+richest sensor integrations are Windows monitor tools. Linux and macOS can
+still report NVIDIA GPU metrics through `nvidia-smi` when it is installed.
 
-### `Local_Benchmark`
+---
+
+## Local_Benchmark
 
 Ollama benchmark scripts for comparing local models across context sizes,
 prompt sizes, and launch profiles.
 
-```powershell
-python LLM_Tools\Local_Benchmark\ollama_bench.py --models qwen3.5:4b,qwen2.5:14b --contexts 4096,16384
-python LLM_Tools\Local_Benchmark\ollama_bench_orchestrator.py --profiles nvidia,cpu
+```sh
+python Local_Benchmark/ollama_bench.py --models qwen3.5:4b,qwen2.5:14b --contexts 4096,16384
+python Local_Benchmark/ollama_bench_orchestrator.py --profiles nvidia,cpu
 ```
 
 The worker expects an Ollama server to already be running. The orchestrator can
@@ -87,8 +98,8 @@ not general utilities yet.
 Interactive Collatz conjecture explorer. Plots one or more sequences on a
 zoomable, log-scale tkinter canvas with animation and an interactive legend.
 
-```powershell
-python Explorations\collatz.py
+```sh
+python Explorations/collatz.py
 ```
 
 Uses only the Python standard library.
@@ -110,7 +121,7 @@ Several scripts in this folder have extra dependencies such as `pandas`,
 The repo does not currently define one authoritative environment for every
 script. Treat each folder as a small tool area:
 
-- Most `LLM_Tools` scripts use only the standard library.
+- `LLM_Tools` uses only the Python standard library at runtime.
 - `hardware_detector.py` can use `psutil` when available.
 - `Local_Benchmark` uses standard-library Python but requires Ollama for real
   benchmark runs.
@@ -124,12 +135,12 @@ For this reason, this repo does not currently ship one root dependency file.
 
 Regenerate the repository map with:
 
-```powershell
-python LLM_Tools\generate_folder_structure.py --path T:\Github\sb4ssman\PythonTools
+```sh
+python LLM_Tools/generate_folder_structure.py
 ```
 
 Local output:
 
 ```text
-_claude_outputs\folder_structure.md
+LLM_Tools/Data/folder_structure.md
 ```

@@ -1,27 +1,36 @@
 """
-Generate ASCII folder structure map for any project.
-Excludes common development artifacts and focuses on source files.
+LLM_Tools folder map generator.
 
-=============================================================================
-USAGE
-=============================================================================
-Place this script in your project's _claude_notes/claude_tools/ folder:
+What it does
+  Builds a Markdown tree for a repository, organization/workspace folder, or
+  explicit path. The output is meant for humans and LLM agents that need a
+  quick project inventory without cache folders, virtual environments, build
+  outputs, or other noisy development artifacts.
 
-    [project]/
-    └── _claude_notes/
-        └── claude_tools/
-            └── generate_folder_structure.py
+Default behavior
+  From this public PythonTools repo, the script assumes this layout:
 
-Run with:
-    python generate_folder_structure.py              # Default: scan current repo
-    python generate_folder_structure.py --org        # Scan parent org (one level up)
-    python generate_folder_structure.py --path C:/some/path  # Scan custom path
+      PythonTools/
+      |-- LLM_Tools/
+      |   |-- generate_folder_structure.py
+      |   `-- Data/
+      `-- README.md
 
-Or edit MODE below:
-    MODE = "repo"      # Scan the repo containing this script
-    MODE = "org"       # Scan parent org (one level up from repo)
-    MODE = "custom"    # Use CUSTOM_PATH below
-=============================================================================
+  Repo mode scans the PythonTools repository root.
+  Org mode scans the parent folder above PythonTools.
+  Custom mode scans the path supplied with --path.
+  Output defaults to LLM_Tools/Data/folder_structure.md.
+
+Usage
+  python LLM_Tools/generate_folder_structure.py
+  python LLM_Tools/generate_folder_structure.py --org
+  python LLM_Tools/generate_folder_structure.py --path /some/project
+  python LLM_Tools/generate_folder_structure.py --path C:/some/project --out map.md
+
+Notes for agents
+  This tool is intentionally generic. It no longer depends on, writes to, or
+  assumes a Claude-specific notes folder. Use --out when a calling project
+  wants the generated map somewhere else.
 """
 
 import sys
@@ -29,15 +38,6 @@ import io
 import argparse
 from pathlib import Path
 from datetime import datetime
-
-# ============================================================================
-# OUTPUT NOTE
-# Output always lands in <this_script>/../_claude_outputs/folder_structure.md
-# — i.e. the _claude_notes/_claude_outputs/ folder of whichever project hosts
-# this script. This is intentional: the tool lives in your notes folder and
-# writes its results there. Even --path <external> writes output here, not to
-# the target project.
-# ============================================================================
 
 # ============================================================================
 # USER SETTINGS - Edit these values or use command-line arguments
@@ -48,6 +48,9 @@ MODE = "repo"
 
 # Custom path (used when MODE = "custom")
 CUSTOM_PATH = ""
+
+# Default output path, relative to this script's directory.
+DEFAULT_OUTPUT = "Data/folder_structure.md"
 # ============================================================================
 
 # Directories excluded everywhere in the tree regardless of depth.
@@ -192,12 +195,18 @@ def main():
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
     # Parse command-line arguments
-    parser = argparse.ArgumentParser(description="Generate folder structure map")
+    parser = argparse.ArgumentParser(description="Generate a Markdown folder structure map")
     parser.add_argument('--org', action='store_true', help='Scan parent organization (one level up from repo)')
     parser.add_argument('--path', type=str, help='Scan custom path')
+    parser.add_argument('--out', type=str, help='Output Markdown file path')
     args = parser.parse_args()
 
+    script_path = Path(__file__).resolve()
+    tool_dir = script_path.parent
+    repo_root = tool_dir.parent
+
     # Determine mode
+    target = None
     if args.path:
         mode = "custom"
         target = Path(args.path)
@@ -206,21 +215,21 @@ def main():
     else:
         mode = MODE
 
-    # Resolve scan target and output directory.
-    # Output always lands in _claude_notes/_claude_outputs/ next to this script —
-    # see the OUTPUT NOTE at the top of the file.
-    script_path = Path(__file__).resolve()
-    output_dir = script_path.parent.parent / '_claude_outputs'
+    output_file = Path(args.out).expanduser() if args.out else tool_dir / DEFAULT_OUTPUT
+    if not output_file.is_absolute():
+        output_file = Path.cwd() / output_file
 
     if mode == "custom":
+        if target is None:
+            target = Path(CUSTOM_PATH)
+        if not str(target):
+            raise SystemExit("Custom mode requires --path or a CUSTOM_PATH value.")
         title = f"{target.name} Folder Structure"
     elif mode == "org":
-        # script -> claude_tools -> _claude_notes -> repo -> org
-        target = script_path.parent.parent.parent.parent
+        target = repo_root.parent
         title = f"{target.name} Organization Structure"
     else:
-        # Repo mode: script -> claude_tools -> _claude_notes -> repo
-        target = script_path.parent.parent.parent
+        target = repo_root
         title = f"{target.name} Folder Structure"
 
     scan_root = target.resolve()
@@ -249,11 +258,10 @@ def main():
         "## Notes",
         "- Excludes (always): __pycache__, .git, .venv, node_modules, and other dev artifacts",
         "- Excludes (root-only): dist, build, lib, var, logs, and other top-level build outputs",
-        "- Output always written to _claude_notes/_claude_outputs/ of the host project",
+        f"- Output written to: {output_file}",
         "- Generated by: `generate_folder_structure.py`",
     ]
 
-    output_file = output_dir / 'folder_structure.md'
     output_file.parent.mkdir(parents=True, exist_ok=True)
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write('\n'.join(output))

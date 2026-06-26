@@ -1,35 +1,39 @@
 """
-Sensor Monitor
-Author:  sb4ssman
-Created: 2026-06-08
+LLM_Tools live sensor monitor.
 
-Reads live hardware sensor data (temps, fan RPM, GPU stats) by tapping into
-existing monitoring tool data streams rather than fighting drivers directly.
+What it does
+  Reads live temperatures, fan speeds, GPU load, GPU memory, GPU power, and CPU
+  package power when a supported sensor source is available. It does not talk
+  to drivers directly; instead it consumes existing monitor integrations and
+  command-line tools, then merges the readings into one small schema.
 
-Source priority (first available wins, others fill gaps):
-  1. HWiNFO64          shared memory  Global\\HWiNFO_SENS_SM2
-  2. MSI Afterburner   shared memory  Global\\MAHMSharedMemory
-  3. LibreHardwareMonitor  WMI        root\\LibreHardwareMonitor
-  4. OpenHardwareMonitor   WMI        root\\OpenHardwareMonitor
-  5. nvidia-smi            subprocess (GPU temps/util/power/fan)
-  6. WMI fallback          MSAcpi_ThermalZoneTemperature + basic counters
+Source priority
+  1. HWiNFO64 shared memory on Windows
+  2. MSI Afterburner shared memory on Windows
+  3. LibreHardwareMonitor WMI on Windows
+  4. OpenHardwareMonitor WMI on Windows
+  5. nvidia-smi on any platform where it is installed
+  6. Windows WMI thermal-zone fallback
 
-Designed to be hardware-agnostic and importable. The stream() method logs
-continuously so you can correlate thermal events to process activity after
-the fact.
+Cross-platform expectations
+  The best sensor coverage is currently Windows-first because the richest
+  sources are Windows monitor tools. Linux/macOS can still report NVIDIA GPU
+  metrics through nvidia-smi when available. Missing tools are tolerated; the
+  script returns an empty "none" snapshot instead of failing loudly.
 
 Usage
-  python sensor_monitor.py                        # one snapshot, human-readable
-  python sensor_monitor.py --mode llm             # compact JSON
-  python sensor_monitor.py --stream               # continuous log to stdout
-  python sensor_monitor.py --stream --out FILE    # continuous log to file
-  python sensor_monitor.py --interval 5           # poll every 5 seconds (default: 3)
+  python LLM_Tools/sensor_monitor.py
+  python LLM_Tools/sensor_monitor.py --sources
+  python LLM_Tools/sensor_monitor.py --mode llm
+  python LLM_Tools/sensor_monitor.py --stream
+  python LLM_Tools/sensor_monitor.py --stream --out sensors.jsonl
+  python LLM_Tools/sensor_monitor.py --interval 5
 
-  # From another script:
+Import API
   from sensor_monitor import SensorMonitor
   mon = SensorMonitor()
-  data = mon.read()         # dict with temps, fans, gpu, source info
-  mon.stream(interval=3)    # blocks; Ctrl+C to stop
+  data = mon.read()
+  mon.stream(interval=3)
 """
 
 import argparse

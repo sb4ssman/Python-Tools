@@ -21,6 +21,7 @@ env/
 *.log
 *.sqlite
 _claude_outputs/
+LLM_Tools/Data/
 
 # OS files
 .DS_Store
